@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台股績效系統</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0c10;--surface:#111418;--surface2:#181d24;--surface3:#1e252f;
+  --border:#252d38;--border2:#2e3a47;
+  --text:#e8edf3;--text2:#8a9ab0;--text3:#4a5a6a;
+  --green:#00d97e;--green2:#00a85f;--green-dim:rgba(0,217,126,0.12);
+  --red:#ff4d6d;--red2:#cc2d4a;--red-dim:rgba(255,77,109,0.12);
+  --blue:#3b9eff;--blue-dim:rgba(59,158,255,0.12);
+  --gold:#f5c842;--gold-dim:rgba(245,200,66,0.12);
+  --purple:#a78bfa;
+  --r:8px;--r2:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-serif;min-height:100vh;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+
+.header{background:linear-gradient(135deg,#0d1117 0%,#111827 100%);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:16px;height:60px;position:sticky;top:0;z-index:100;flex-wrap:wrap;}
+.logo{font-size:17px;font-weight:900;color:var(--blue);letter-spacing:-0.5px;white-space:nowrap;}
+.logo span{color:var(--text2);font-weight:300;}
+.header-nav{display:flex;gap:4px;}
+.nav-btn{background:none;border:none;color:var(--text2);font-size:13px;font-family:inherit;padding:6px 12px;border-radius:var(--r);cursor:pointer;transition:all .2s;white-space:nowrap;}
+.nav-btn:hover{background:var(--surface2);color:var(--text);}
+.nav-btn.active{background:var(--blue-dim);color:var(--blue);font-weight:500;}
+.gas-btn{background:var(--gold-dim);border:1px solid rgba(245,200,66,0.3);color:var(--gold);font-size:12px;font-family:inherit;padding:6px 14px;border-radius:var(--r);cursor:pointer;transition:all .2s;white-space:nowrap;}
+.gas-btn:hover{background:rgba(245,200,66,0.2);}
+.date-badge{background:var(--surface2);border:1px solid var(--border);padding:4px 10px;border-radius:var(--r);font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;white-space:nowrap;margin-left:auto;}
+
+.main{padding:20px 24px;max-width:1600px;margin:0 auto;}
+.page{display:none;}
+.page.active{display:block;}
+
+.cards-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:16px;}
+.stat-card .label{font-size:11px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;}
+.stat-card .value{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+.stat-card .sub{font-size:11px;color:var(--text2);margin-top:4px;}
+.pos{color:var(--green);}.neg{color:var(--red);}.neu{color:var(--text);}
+
+.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.toolbar select,.toolbar input{background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:7px 10px;border-radius:var(--r);outline:none;transition:border-color .2s;}
+.toolbar select:focus,.toolbar input:focus{border-color:var(--blue);}
+.toolbar input[type=text]{width:180px;}
+.btn{background:var(--blue);border:none;color:#fff;font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:var(--r);cursor:pointer;transition:all .2s;white-space:nowrap;}
+.btn:hover{background:#2d8ae8;}
+.btn.green{background:var(--green2);}
+.btn.green:hover{background:#007d47;}
+.btn.red{background:var(--red2);}
+.btn.red:hover{background:#a01f35;}
+.btn.ghost{background:var(--surface2);border:1px solid var(--border2);color:var(--text2);}
+.btn.ghost:hover{border-color:var(--blue);color:var(--blue);}
+.spacer{flex:1;}
+.count-badge{font-size:12px;color:var(--text3);padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:20px;white-space:nowrap;}
+
+.cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+.cat-tab{background:var(--surface);border:1px solid var(--border);color:var(--text2);font-size:12px;font-family:inherit;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all .2s;}
+.cat-tab:hover{border-color:var(--border2);color:var(--text);}
+.cat-tab.active{background:var(--blue-dim);border-color:var(--blue);color:var(--blue);}
+
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);overflow:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{background:var(--surface2);padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:0;}
+thead th:hover{color:var(--text2);}
+tbody tr{border-top:1px solid var(--border);transition:background .12s;}
+tbody tr:hover{background:var(--surface2);}
+tbody td{padding:8px 12px;vertical-align:middle;}
+.code{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text2);}
+.name{font-weight:500;}
+.score{font-family:'JetBrains Mono',monospace;font-weight:600;}
+.price-cell{font-family:'JetBrains Mono',monospace;}
+.change-cell{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:12px;}
+.cat-tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:500;}
+.pnl-cell{font-family:'JetBrains Mono',monospace;font-weight:600;}
+.pct-cell{font-family:'JetBrains Mono',monospace;font-size:12px;}
+
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:20px;}
+.chart-card.full{grid-column:1/-1;}
+.chart-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:14px;}
+.chart-wrap{position:relative;height:240px;}
+
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--r2);padding:24px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto;}
+.modal h3{font-size:16px;margin-bottom:16px;}
+.form-group{margin-bottom:13px;}
+.form-label{font-size:12px;color:var(--text2);margin-bottom:5px;display:block;}
+.form-input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:8px 10px;border-radius:var(--r);outline:none;}
+.form-input:focus{border-color:var(--blue);}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;}
+
+.gas-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:20px;margin-bottom:20px;}
+.gas-panel h3{font-size:14px;margin-bottom:12px;color:var(--text2);}
+.gas-row{display:flex;gap:10px;align-items:center;}
+.gas-input{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:8px 10px;border-radius:var(--r);outline:none;}
+.gas-input:focus{border-color:var(--gold);}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--text3);flex-shrink:0;}
+.status-dot.ok{background:var(--green);}
+.status-dot.err{background:var(--red);}
+
+.loading-overlay{position:fixed;inset:0;background:rgba(10,12,16,.82);z-index:300;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+.loading-overlay.show{display:flex;}
+.spinner{width:38px;height:38px;border:3px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin .75s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{color:var(--text2);font-size:14px;}
+
+.stock-picker{display:grid;grid-template-columns:1fr 1fr;gap:14px;height:380px;}
+.picker-list{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);overflow-y:auto;padding:6px;}
+.picker-item{padding:7px 9px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:7px;transition:background .12s;}
+.picker-item:hover{background:var(--surface3);}
+.picker-item.selected{background:var(--blue-dim);}
+.picker-item .code-sm{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);}
+.picker-search{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;padding:6px 9px;border-radius:var(--r);outline:none;margin-bottom:7px;}
+
+.toast{position:fixed;bottom:24px;right:24px;z-index:400;padding:11px 18px;border-radius:var(--r);font-size:13px;font-weight:500;transform:translateY(80px);opacity:0;transition:all .3s;}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.ok{background:var(--green2);color:#fff;}
+.toast.fail{background:var(--red2);color:#fff;}
+
+.ledger-empty{padding:40px;text-align:center;color:var(--text3);font-size:14px;}
+
+@media(max-width:768px){
+  .charts-grid{grid-template-columns:1fr;}
+  .stock-picker{grid-template-columns:1fr;height:auto;}
+  .header{height:auto;padding:10px 12px;}
+  .main{padding:12px;}
+}
+</style>
+</head>
+<body>
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">載入中...</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<div class="header">
+  <div class="logo">台股<span>績效系統</span></div>
+  <div class="header-nav">
+    <button class="nav-btn active" id="navPerf" onclick="showPage('perf',this)">📊 績效</button>
+    <button class="nav-btn" id="navLedger" onclick="showPage('ledger',this)">📒 帳務本</button>
+    <button class="nav-btn" id="navChart" onclick="showPage('chart',this)">📈 圖表</button>
+    <button class="nav-btn" id="navSettings" onclick="showPage('settings',this)">⚙️ 設定</button>
+  </div>
+  <div class="date-badge" id="dateBadge">--</div>
+  <button class="gas-btn" onclick="syncToGAS()">☁️ 同步GAS</button>
+</div>
+
+<div class="main">
+
+<!-- PERF PAGE -->
+<div class="page active" id="page-perf">
+  <div class="cards-row" id="summaryCards"></div>
+  <div class="cat-tabs" id="catTabs"></div>
+  <div class="toolbar">
+    <select id="modeSelect" onchange="renderPerf()">
+      <option value="all">全部標的</option>
+      <option value="top20">貝氏前20名</option>
+      <option value="manual">手動選取</option>
+    </select>
+    <input type="text" id="searchInput" placeholder="搜尋代號/名稱..." oninput="renderPerf()">
+    <button class="btn ghost" onclick="openPicker()">🎯 選取標的</button>
+    <div class="spacer"></div>
+    <div class="count-badge" id="countBadge">0 檔</div>
+    <select id="saveLedgerSelect" onchange="updateSaveLedgerSelect()">
+      <option value="2026-05-11">05/11帳本</option>
+      <option value="2026-05-12">05/12帳本</option>
+    </select>
+    <button class="btn ghost" onclick="openAddLedgerModal()">＋ 新增帳本</button>
+    <button class="btn green" onclick="fetchLivePrices()">🔄 更新現價</button>
+    <button class="btn" onclick="saveTodayToGAS()">💾 存今日帳本</button>
+  </div>
+  <div class="table-wrap" style="max-height:calc(100vh - 320px);">
+    <table id="perfTable">
+      <thead><tr>
+        <th onclick="sortBy('代號')">代號</th>
+        <th onclick="sortBy('名稱')">名稱</th>
+        <th onclick="sortBy('分類')">分類</th>
+        <th onclick="sortBy('貝氏評分')">貝氏評分 ↕</th>
+        <th onclick="sortBy('現價')">今日限價</th>
+        <th onclick="sortBy('漲幅')">今日漲幅</th>
+        <th>買入股數</th>
+        <th onclick="sortBy('pnl')">預估損益</th>
+        <th onclick="sortBy('pct')">損益%</th>
+        <th>操作</th>
+      </tr></thead>
+      <tbody id="perfBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- LEDGER PAGE -->
+<div class="page" id="page-ledger">
+  <div class="toolbar">
+    <select id="currentLedgerDate" onchange="changeCurrentLedgerDate(this.value)">
+      <option value="2026-05-11">05/11帳務本</option>
+      <option value="2026-05-12">05/12帳務本</option>
+    </select>
+    <select id="ledgerDateFilter" onchange="renderLedger()"><option value="">全部日期</option></select>
+    <select id="ledgerCatFilter" onchange="renderLedger()"><option value="">全部分類</option></select>
+    <input type="text" id="ledgerSearch" placeholder="搜尋代號/名稱..." oninput="renderLedger()">
+    <input type="number" id="ledgerMinPrice" placeholder="最低買入價" oninput="renderLedger()" style="width:100px;">
+    <input type="number" id="ledgerMaxPrice" placeholder="最高買入價" oninput="renderLedger()" style="width:100px;">
+    <select id="ledgerPnlFilter" onchange="renderLedger()">
+      <option value="">全部損益</option>
+      <option value="profit">獲利</option>
+      <option value="loss">虧損</option>
+      <option value="small">小額 (±5%)</option>
+    </select>
+    <div class="spacer"></div>
+    <button class="btn ghost" onclick="loadLedgerFromGAS()">☁️ 從GAS載入</button>
+    <button class="btn ghost" onclick="openAddManual()">＋ 手動新增</button>
+  </div>
+  <div class="cards-row" id="ledgerSummary"></div>
+  <div class="table-wrap" style="max-height:calc(100vh - 320px);">
+    <table id="ledgerTable">
+      <thead><tr>
+        <th>日期</th><th>代號</th><th>名稱</th><th>分類</th>
+        <th>買入價</th><th>股數</th><th>投入金額</th>
+        <th>現價</th><th>市值</th><th>損益</th><th>損益%</th><th>操作</th>
+      </tr></thead>
+      <tbody id="ledgerBody"></tbody>
+    </table>
+    <div class="ledger-empty" id="ledgerEmpty">帳務本是空的。請從績效頁存今日帳本，或手動新增。</div>
+  </div>
+</div>
+
+<!-- CHART PAGE -->
+<div class="page" id="page-chart">
+  <div class="toolbar">
+    <select id="chartCat" onchange="renderCharts()"><option value="all">全部分類</option></select>
+    <div class="spacer"></div>
+    <button class="btn ghost" onclick="renderCharts()">🔄 重繪</button>
+  </div>
+  <div class="charts-grid">
+    <div class="chart-card"><div class="chart-title">各分類股票數量</div><div class="chart-wrap"><canvas id="catPieChart"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">帳務本損益% 分布</div><div class="chart-wrap"><canvas id="pnlDistChart"></canvas></div></div>
+    <div class="chart-card full"><div class="chart-title">各分類總損益 (NTD)</div><div class="chart-wrap" style="height:260px"><canvas id="scoreBarChart"></canvas></div></div>
+    <div class="chart-card full"><div class="chart-title">帳務本各標的損益 (NTD)</div><div class="chart-wrap" style="height:300px"><canvas id="ledgerBarChart"></canvas></div></div>
+  </div>
+</div>
+
+<!-- SETTINGS PAGE -->
+<div class="page" id="page-settings">
+  <div class="gas-panel">
+    <h3>🔗 Google Apps Script 設定</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">部署 GAS 為網頁應用程式後，將 URL 貼入此處。執行身分選「以我的身份」，存取權選「任何人」。</p>
+    <div class="gas-row">
+      <input class="gas-input" id="gasUrl" placeholder="https://script.google.com/macros/s/xxxx/exec">
+      <div class="status-dot" id="gasStatus"></div>
+      <button class="btn ghost" onclick="testGAS()">測試</button>
+      <button class="btn" onclick="saveGASUrl()">儲存</button>
+      <button class="btn ghost" onclick="loadStocksFromGAS()">📊 載入股票數據</button>
+    </div>
+  </div>
+
+  <div class="gas-panel">
+    <h3>📁 上傳股票數據檔案</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">上傳掃描出的股票數據檔案（JSON / CSV / XLSX），系統會自動解析並更新到試算表。</p>
+    <div class="gas-row">
+      <input type="file" id="dataFile" accept=".json,.csv,.xls,.xlsx" style="flex:1;">
+      <button class="btn" onclick="uploadDataFile()">📤 上傳並更新</button>
+    </div>
+    <div id="uploadStatus" style="margin-top:10px;font-size:12px;color:var(--text3);"></div>
+  </div>
+
+  <div class="gas-panel">
+    <h3>�️ 清除快取</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">清除所有本地儲存的數據，包括帳務本、手動選取的股票和GAS設定。</p>
+    <div class="gas-row">
+      <button class="btn red" onclick="clearCache()">🗑️ 清除所有快取</button>
+    </div>
+  </div>
+
+  <div class="gas-panel">
+    <h3>�📋 GAS 程式碼（複製後貼入 Apps Script 並部署，或直接在下方編輯後更新）</h3>
+    <textarea id="gasCode" style="width:100%;height:520px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.5;padding:12px;border-radius:var(--r);resize:vertical;outline:none;" readonly></textarea>
+    <div style="display:flex;gap:10px;margin-top:10px;">
+      <button class="btn ghost" onclick="copyGASCode()">📋 複製程式碼</button>
+      <button class="btn ghost" onclick="enableEditGAS()">✏️ 編輯</button>
+      <button class="btn" id="updateGASBtn" onclick="updateGASCode()" style="display:none;">☁️ 更新到GAS</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- .main -->
+
+<!-- PICKER MODAL -->
+<div class="modal-bg" id="pickerModal">
+  <div class="modal" style="max-width:680px;">
+    <h3>🎯 手動選取標的</h3>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input class="picker-search" id="pickerSearch" placeholder="搜尋..." oninput="filterPicker()" style="flex:1;margin:0;">
+      <select id="pickerCatFilter" onchange="filterPicker()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;padding:6px;border-radius:var(--r);outline:none;"><option value="">全部分類</option></select>
+    </div>
+    <div class="stock-picker">
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:5px;display:flex;align-items:center;gap:8px;">
+          可選股票 <span id="pickerAvailCount"></span>
+          <button class="btn ghost" style="padding:2px 8px;font-size:10px;" onclick="selectAllPicker()">全選</button>
+        </div>
+        <div class="picker-list" id="pickerAvail"></div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:5px;display:flex;align-items:center;gap:8px;">
+          已選取 <span id="pickerSelCount"></span>
+          <button class="btn ghost" style="padding:2px 8px;font-size:10px;" onclick="clearAllPicker()">清空</button>
+        </div>
+        <div class="picker-list" id="pickerSel"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closePicker()">取消</button>
+      <button class="btn" onclick="applyPicker()">確認套用</button>
+    </div>
+  </div>
+</div>
+
+<!-- MANUAL ADD MODAL -->
+<div class="modal-bg" id="addModal">
+  <div class="modal">
+    <h3>＋ 手動新增帳務</h3>
+    <div class="form-group"><label class="form-label">日期</label><input class="form-input" id="addDate" type="date"></div>
+    <div class="form-group"><label class="form-label">股票代號</label><input class="form-input" id="addCode" placeholder="e.g. 2330"></div>
+    <div class="form-group"><label class="form-label">股票名稱</label><input class="form-input" id="addName" placeholder="e.g. 台積電"></div>
+    <div class="form-group"><label class="form-label">分類</label>
+      <select class="form-input" id="addCat">
+        <option value="long_term">long_term 長線</option>
+        <option value="intraday_dip">intraday_dip 當沖</option>
+        <option value="reversal">reversal 反轉</option>
+        <option value="pullback">pullback 回調</option>
+        <option value="dark_horse">dark_horse 黑馬</option>
+        <option value="explosive">explosive 爆發</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">買入價格</label><input class="form-input" id="addPrice" type="number" step="0.01" placeholder="0.00"></div>
+    <div class="form-group"><label class="form-label">貝氏評分</label><input class="form-input" id="addScore" type="number" step="0.01" placeholder="0.00"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="document.getElementById('addModal').classList.remove('open')">取消</button>
+      <button class="btn green" onclick="submitManualAdd()">新增</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD LEDGER MODAL -->
+<div class="modal-bg" id="addLedgerModal">
+  <div class="modal">
+    <h3>＋ 新增帳本</h3>
+    <div class="form-group"><label class="form-label">帳本日期</label><input class="form-input" id="newLedgerDate" type="date"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="document.getElementById('addLedgerModal').classList.remove('open')">取消</button>
+      <button class="btn green" onclick="submitAddLedger()">新增帳本</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// EMBEDDED STOCK DATA (from today's xlsx)
+// ============================================================
+const STOCKS_RAW = [{"代號":"9958","名稱":"世紀鋼","貝氏評分":4.53,"分類":"long_term","現價":103.5,"漲幅":"+0.5"},{"代號":"9945","名稱":"潤泰新","貝氏評分":4.53,"分類":"long_term","現價":23.6,"漲幅":"+0.9"},{"代號":"9941","名稱":"裕融","貝氏評分":4.53,"分類":"long_term","現價":75.2,"漲幅":"-0.7"},{"代號":"9940","名稱":"信義","貝氏評分":4.53,"分類":"long_term","現價":19.2,"漲幅":"-2.0"},{"代號":"9938","名稱":"百和","貝氏評分":4.53,"分類":"long_term","現價":45.25,"漲幅":"+1.0"},{"代號":"9933","名稱":"中鼎","貝氏評分":4.53,"分類":"long_term","現價":36.45,"漲幅":"-1.0"},{"代號":"9904","名稱":"寶成","貝氏評分":4.53,"分類":"long_term","現價":25.8,"漲幅":"-0.4"},{"代號":"8422","名稱":"可寧衛*","貝氏評分":4.53,"分類":"long_term","現價":27.95,"漲幅":"+0.2"},{"代號":"8374","名稱":"羅昇","貝氏評分":4.53,"分類":"long_term","現價":89.5,"漲幅":"+1.0"},{"代號":"8249","名稱":"菱光","貝氏評分":4.53,"分類":"long_term","現價":51.0,"漲幅":"+2.7"},{"代號":"8222","名稱":"寶一","貝氏評分":4.53,"分類":"long_term","現價":35.5,"漲幅":"-6.5"},{"代號":"8215","名稱":"明基材","貝氏評分":4.53,"分類":"long_term","現價":27.8,"漲幅":"+2.8"},{"代號":"8131","名稱":"福懋科","貝氏評分":4.53,"分類":"long_term","現價":67.5,"漲幅":"+2.4"},{"代號":"8112","名稱":"至上","貝氏評分":4.53,"分類":"long_term","現價":86.8,"漲幅":"-2.8"},{"代號":"8105","名稱":"凌巨","貝氏評分":4.53,"分類":"long_term","現價":13.45,"漲幅":"-0.7"},{"代號":"8104","名稱":"錸寶","貝氏評分":4.53,"分類":"long_term","現價":34.7,"漲幅":"+2.8"},{"代號":"8103","名稱":"瀚荃","貝氏評分":4.53,"分類":"long_term","現價":115.5,"漲幅":"-0.4"},{"代號":"8070","名稱":"長華*","貝氏評分":4.53,"分類":"long_term","現價":48.25,"漲幅":"+0.1"},{"代號":"8039","名稱":"台虹","貝氏評分":4.53,"分類":"long_term","現價":135.5,"漲幅":"+2.3"},{"代號":"8033","名稱":"雷虎","貝氏評分":4.53,"分類":"long_term","現價":144.0,"漲幅":"-9.4"},{"代號":"8011","名稱":"台通","貝氏評分":4.53,"分類":"long_term","現價":19.3,"漲幅":"+0.0"},{"代號":"7780","名稱":"大研生醫*","貝氏評分":4.53,"分類":"long_term","現價":18.5,"漲幅":"-0.8"},{"代號":"6944","名稱":"兆聯實業","貝氏評分":4.53,"分類":"long_term","現價":923.0,"漲幅":"-4.3"},{"代號":"6937","名稱":"天虹","貝氏評分":4.53,"分類":"long_term","現價":295.5,"漲幅":"-3.6"},{"代號":"6919","名稱":"康霈*","貝氏評分":4.53,"分類":"long_term","現價":103.0,"漲幅":"-1.0"},{"代號":"6909","名稱":"創控","貝氏評分":4.53,"分類":"long_term","現價":56.3,"漲幅":"-1.1"},{"代號":"6862","名稱":"三集瑞-KY","貝氏評分":4.53,"分類":"long_term","現價":168.5,"漲幅":"-9.9"},{"代號":"6830","名稱":"汎銓","貝氏評分":4.53,"分類":"long_term","現價":754.0,"漲幅":"-4.2"},{"代號":"6806","名稱":"森崴能源","貝氏評分":4.53,"分類":"long_term","現價":19.55,"漲幅":"-3.9"},{"代號":"6782","名稱":"視陽","貝氏評分":4.53,"分類":"long_term","現價":194.5,"漲幅":"-0.8"},{"代號":"6753","名稱":"龍德造船","貝氏評分":4.53,"分類":"long_term","現價":131.5,"漲幅":"-9.3"},{"代號":"6719","名稱":"力智","貝氏評分":4.53,"分類":"long_term","現價":190.0,"漲幅":"+1.6"},{"代號":"6706","名稱":"惠特","貝氏評分":4.53,"分類":"long_term","現價":168.5,"漲幅":"-2.3"},{"代號":"6698","名稱":"旭暉應材","貝氏評分":4.53,"分類":"long_term","現價":31.2,"漲幅":"-5.2"},{"代號":"6691","名稱":"洋基工程","貝氏評分":4.53,"分類":"long_term","現價":643.0,"漲幅":"-1.7"},{"代號":"6672","名稱":"騰輝電子-KY","貝氏評分":4.53,"分類":"long_term","現價":209.0,"漲幅":"+0.5"},{"代號":"6668","名稱":"中揚光","貝氏評分":4.53,"分類":"long_term","現價":36.6,"漲幅":"-0.3"},{"代號":"6605","名稱":"帝寶","貝氏評分":4.53,"分類":"long_term","現價":129.0,"漲幅":"-0.8"},{"代號":"6592","名稱":"和潤企業","貝氏評分":4.53,"分類":"long_term","現價":60.9,"漲幅":"+0.3"},{"代號":"6589","名稱":"台康生技","貝氏評分":4.53,"分類":"long_term","現價":45.1,"漲幅":"-0.6"},{"代號":"6550","名稱":"北極星藥業-KY","貝氏評分":4.53,"分類":"long_term","現價":16.9,"漲幅":"-4.0"},{"代號":"6477","名稱":"安集","貝氏評分":4.53,"分類":"long_term","現價":34.5,"漲幅":"-1.6"},{"代號":"6472","名稱":"保瑞","貝氏評分":4.53,"分類":"long_term","現價":408.5,"漲幅":"-2.5"},{"代號":"6456","名稱":"GIS-KY","貝氏評分":4.53,"分類":"long_term","現價":66.6,"漲幅":"+1.7"},{"代號":"6442","名稱":"光聖","貝氏評分":4.53,"分類":"long_term","現價":1950.0,"漲幅":"-0.8"},{"代號":"6438","名稱":"迅得","貝氏評分":4.53,"分類":"long_term","現價":171.0,"漲幅":"+0.3"},{"代號":"6409","名稱":"旭隼","貝氏評分":4.53,"分類":"long_term","現價":764.0,"漲幅":"-6.9"},{"代號":"6269","名稱":"台郡","貝氏評分":4.53,"分類":"long_term","現價":58.0,"漲幅":"-8.2"},{"代號":"6243","名稱":"迅杰","貝氏評分":4.53,"分類":"long_term","現價":34.45,"漲幅":"+0.0"},{"代號":"6239","名稱":"力成","貝氏評分":4.53,"分類":"long_term","現價":225.5,"漲幅":"+1.6"},{"代號":"6235","名稱":"華孚","貝氏評分":4.53,"分類":"long_term","現價":43.6,"漲幅":"+1.4"},{"代號":"6226","名稱":"光鼎","貝氏評分":4.53,"分類":"long_term","現價":12.2,"漲幅":"-0.8"},{"代號":"6224","名稱":"聚鼎","貝氏評分":4.53,"分類":"long_term","現價":75.7,"漲幅":"-3.8"},{"代號":"6214","名稱":"精誠","貝氏評分":4.53,"分類":"long_term","現價":127.0,"漲幅":"+1.2"},{"代號":"6209","名稱":"今國光","貝氏評分":4.53,"分類":"long_term","現價":65.8,"漲幅":"-0.3"},{"代號":"6205","名稱":"詮欣","貝氏評分":4.53,"分類":"long_term","現價":86.1,"漲幅":"+1.4"},{"代號":"6191","名稱":"精成科","貝氏評分":4.53,"分類":"long_term","現價":94.8,"漲幅":"-0.7"},{"代號":"6189","名稱":"豐藝","貝氏評分":4.53,"分類":"long_term","現價":48.2,"漲幅":"-1.6"},{"代號":"6176","名稱":"瑞儀","貝氏評分":4.53,"分類":"long_term","現價":104.0,"漲幅":"-0.5"},{"代號":"6168","名稱":"宏齊","貝氏評分":4.53,"分類":"long_term","現價":26.5,"漲幅":"+1.5"},{"代號":"6165","名稱":"浪凡","貝氏評分":4.53,"分類":"long_term","現價":51.8,"漲幅":"-0.4"},{"代號":"6153","名稱":"嘉聯益","貝氏評分":4.53,"分類":"long_term","現價":18.05,"漲幅":"-1.6"},{"代號":"6141","名稱":"柏承","貝氏評分":4.53,"分類":"long_term","現價":33.25,"漲幅":"+0.5"},{"代號":"6139","名稱":"亞翔","貝氏評分":4.53,"分類":"long_term","現價":679.0,"漲幅":"-4.9"},{"代號":"6133","名稱":"金橋","貝氏評分":4.53,"分類":"long_term","現價":21.9,"漲幅":"-0.2"},{"代號":"6120","名稱":"達運","貝氏評分":4.53,"分類":"long_term","現價":12.8,"漲幅":"-0.8"},{"代號":"6117","名稱":"迎廣","貝氏評分":4.53,"分類":"long_term","現價":80.3,"漲幅":"-0.5"},{"代號":"6112","名稱":"邁達特","貝氏評分":4.53,"分類":"long_term","現價":44.25,"漲幅":"-0.2"},{"代號":"6108","名稱":"競國","貝氏評分":4.53,"分類":"long_term","現價":20.0,"漲幅":"-8.3"},{"代號":"5880","名稱":"合庫金","貝氏評分":4.53,"分類":"long_term","現價":23.0,"漲幅":"-0.2"},{"代號":"5871","名稱":"中租-KY","貝氏評分":4.53,"分類":"long_term","現價":112.0,"漲幅":"-0.4"},{"代號":"5534","名稱":"長虹","貝氏評分":4.53,"分類":"long_term","現價":79.4,"漲幅":"+1.3"},{"代號":"5531","名稱":"鄉林","貝氏評分":4.53,"分類":"long_term","現價":8.4,"漲幅":"-0.8"},{"代號":"5515","名稱":"建國","貝氏評分":4.53,"分類":"long_term","現價":38.6,"漲幅":"-3.4"},{"代號":"5244","名稱":"弘凱","貝氏評分":4.53,"分類":"long_term","現價":40.7,"漲幅":"-3.1"},{"代號":"5243","名稱":"乙盛-KY","貝氏評分":4.53,"分類":"long_term","現價":107.0,"漲幅":"+0.0"},{"代號":"5222","名稱":"全訊","貝氏評分":4.53,"分類":"long_term","現價":131.5,"漲幅":"-5.4"},{"代號":"4989","名稱":"榮科","貝氏評分":4.53,"分類":"long_term","現價":94.6,"漲幅":"-0.1"},{"代號":"4976","名稱":"佳凌","貝氏評分":4.53,"分類":"long_term","現價":29.0,"漲幅":"+0.2"},{"代號":"4968","名稱":"立積","貝氏評分":4.53,"分類":"long_term","現價":121.0,"漲幅":"+1.3"},{"代號":"4967","名稱":"十銓","貝氏評分":4.53,"分類":"long_term","現價":284.5,"漲幅":"-4.5"},{"代號":"4960","名稱":"誠美材","貝氏評分":4.53,"分類":"long_term","現價":39.7,"漲幅":"+0.9"},{"代號":"4958","名稱":"臻鼎-KY","貝氏評分":4.53,"分類":"long_term","現價":412.0,"漲幅":"+2.7"},{"代號":"4956","名稱":"光鋐","貝氏評分":4.53,"分類":"long_term","現價":45.35,"漲幅":"-7.4"},{"代號":"4949","名稱":"有成精密","貝氏評分":4.53,"分類":"long_term","現價":95.4,"漲幅":"+1.8"},{"代號":"4938","名稱":"和碩","貝氏評分":4.53,"分類":"long_term","現價":83.4,"漲幅":"-1.2"},{"代號":"4927","名稱":"泰鼎-KY","貝氏評分":4.53,"分類":"long_term","現價":54.9,"漲幅":"+0.9"},{"代號":"4915","名稱":"致伸","貝氏評分":4.53,"分類":"long_term","現價":71.7,"漲幅":"-1.1"},{"代號":"4904","名稱":"遠傳","貝氏評分":4.53,"分類":"long_term","現價":96.2,"漲幅":"+0.3"},{"代號":"4746","名稱":"台耀","貝氏評分":4.53,"分類":"long_term","現價":55.5,"漲幅":"+2.2"},{"代號":"4720","名稱":"德淵","貝氏評分":4.53,"分類":"long_term","現價":25.75,"漲幅":"-1.2"},{"代號":"4566","名稱":"時碩工業","貝氏評分":4.53,"分類":"long_term","現價":68.3,"漲幅":"+1.6"},{"代號":"4564","名稱":"元翎","貝氏評分":4.53,"分類":"long_term","現價":17.65,"漲幅":"-1.9"},{"代號":"4562","名稱":"穎漢","貝氏評分":4.53,"分類":"long_term","現價":37.2,"漲幅":"-1.3"},{"代號":"4555","名稱":"氣立","貝氏評分":4.53,"分類":"long_term","現價":42.65,"漲幅":"+0.0"},{"代號":"4540","名稱":"全球傳動","貝氏評分":4.53,"分類":"long_term","現價":69.5,"漲幅":"+1.3"},{"代號":"4532","名稱":"瑞智","貝氏評分":4.53,"分類":"long_term","現價":23.2,"漲幅":"+1.1"},{"代號":"4526","名稱":"東台","貝氏評分":4.53,"分類":"long_term","現價":35.25,"漲幅":"+2.2"},{"代號":"4306","名稱":"炎洲","貝氏評分":4.53,"分類":"long_term","現價":13.35,"漲幅":"+1.5"},{"代號":"4164","名稱":"承業醫","貝氏評分":4.53,"分類":"long_term","現價":29.0,"漲幅":"+1.8"},{"代號":"3715","名稱":"定穎投控","貝氏評分":4.53,"分類":"long_term","現價":181.5,"漲幅":"+0.6"},{"代號":"3714","名稱":"富采","貝氏評分":4.53,"分類":"long_term","現價":67.9,"漲幅":"-4.5"},{"代號":"3712","名稱":"永崴投控","貝氏評分":4.53,"分類":"long_term","現價":20.3,"漲幅":"-1.7"},{"代號":"3708","名稱":"上緯投控","貝氏評分":4.53,"分類":"long_term","現價":121.5,"漲幅":"+2.5"},{"代號":"3704","名稱":"合勤控","貝氏評分":4.53,"分類":"long_term","現價":35.05,"漲幅":"-0.7"},{"代號":"3703","名稱":"欣陸","貝氏評分":4.53,"分類":"long_term","現價":20.75,"漲幅":"+0.2"},{"代號":"3694","名稱":"海華","貝氏評分":4.53,"分類":"long_term","現價":56.8,"漲幅":"-5.3"},{"代號":"3673","名稱":"TPK-KY","貝氏評分":4.53,"分類":"long_term","現價":59.8,"漲幅":"+1.4"},{"代號":"3669","名稱":"圓展","貝氏評分":4.53,"分類":"long_term","現價":40.4,"漲幅":"+2.3"},{"代號":"3605","名稱":"宏致","貝氏評分":4.53,"分類":"long_term","現價":82.3,"漲幅":"-1.2"},{"代號":"3591","名稱":"艾笛森","貝氏評分":4.53,"分類":"long_term","現價":23.3,"漲幅":"-1.3"},{"代號":"3563","名稱":"牧德","貝氏評分":4.53,"分類":"long_term","現價":807.0,"漲幅":"+0.6"},{"代號":"3550","名稱":"聯穎","貝氏評分":4.53,"分類":"long_term","現價":21.4,"漲幅":"+0.2"},{"代號":"3535","名稱":"晶彩科","貝氏評分":4.53,"分類":"long_term","現價":126.0,"漲幅":"-1.9"},{"代號":"3528","名稱":"安馳","貝氏評分":4.53,"分類":"long_term","現價":82.5,"漲幅":"-9.3"},{"代號":"3518","名稱":"柏騰","貝氏評分":4.53,"分類":"long_term","現價":37.0,"漲幅":"+2.8"},{"代號":"3515","名稱":"華擎","貝氏評分":4.53,"分類":"long_term","現價":232.5,"漲幅":"-5.3"},{"代號":"3504","名稱":"揚明光","貝氏評分":4.53,"分類":"long_term","現價":62.8,"漲幅":"+1.1"},{"代號":"3437","名稱":"榮創","貝氏評分":4.53,"分類":"long_term","現價":25.7,"漲幅":"-0.6"},{"代號":"3413","名稱":"京鼎","貝氏評分":4.53,"分類":"long_term","現價":308.5,"漲幅":"-2.2"},{"代號":"3406","名稱":"玉晶光","貝氏評分":4.53,"分類":"long_term","現價":510.0,"漲幅":"+0.8"},{"代號":"3380","名稱":"明泰","貝氏評分":4.53,"分類":"long_term","現價":32.2,"漲幅":"+0.9"},{"代號":"3376","名稱":"新日興","貝氏評分":4.53,"分類":"long_term","現價":206.5,"漲幅":"+2.0"},{"代號":"3346","名稱":"麗清","貝氏評分":4.53,"分類":"long_term","現價":16.75,"漲幅":"-4.0"},{"代號":"3338","名稱":"泰碩","貝氏評分":4.53,"分類":"long_term","現價":72.4,"漲幅":"-0.7"},{"代號":"3257","名稱":"虹冠電","貝氏評分":4.53,"分類":"long_term","現價":55.3,"漲幅":"+0.7"},{"代號":"3231","名稱":"緯創","貝氏評分":4.53,"分類":"long_term","現價":139.0,"漲幅":"-5.1"},{"代號":"3138","名稱":"耀登","貝氏評分":4.53,"分類":"long_term","現價":158.0,"漲幅":"+1.9"},{"代號":"3092","名稱":"鴻碩","貝氏評分":4.53,"分類":"long_term","現價":30.25,"漲幅":"-2.3"},{"代號":"3060","名稱":"銘異","貝氏評分":4.53,"分類":"long_term","現價":28.55,"漲幅":"+2.0"},{"代號":"3059","名稱":"華晶科","貝氏評分":4.53,"分類":"long_term","現價":40.15,"漲幅":"+2.0"},{"代號":"3058","名稱":"立德","貝氏評分":4.53,"分類":"long_term","現價":8.3,"漲幅":"-0.5"},{"代號":"3056","名稱":"富華新","貝氏評分":4.53,"分類":"long_term","現價":13.55,"漲幅":"+1.1"},{"代號":"3052","名稱":"夆典","貝氏評分":4.53,"分類":"long_term","現價":10.7,"漲幅":"+0.5"},{"代號":"3051","名稱":"力特","貝氏評分":4.53,"分類":"long_term","現價":26.35,"漲幅":"+1.3"},{"代號":"3050","名稱":"鈺德","貝氏評分":4.53,"分類":"long_term","現價":12.35,"漲幅":"+0.4"},{"代號":"3047","名稱":"訊舟","貝氏評分":4.53,"分類":"long_term","現價":14.65,"漲幅":"+1.7"},{"代號":"3045","名稱":"台灣大","貝氏評分":4.53,"分類":"long_term","現價":110.0,"漲幅":"+0.0"},{"代號":"3044","名稱":"健鼎","貝氏評分":4.53,"分類":"long_term","現價":489.5,"漲幅":"+1.8"},{"代號":"3041","名稱":"揚智","貝氏評分":4.53,"分類":"long_term","現價":24.7,"漲幅":"+1.6"},{"代號":"3031","名稱":"佰鴻","貝氏評分":4.53,"分類":"long_term","現價":30.0,"漲幅":"+1.5"},{"代號":"3030","名稱":"德律","貝氏評分":4.53,"分類":"long_term","現價":397.0,"漲幅":"+1.9"},{"代號":"3029","名稱":"零壹","貝氏評分":4.53,"分類":"long_term","現價":99.1,"漲幅":"+0.8"},{"代號":"3025","名稱":"星通","貝氏評分":4.53,"分類":"long_term","現價":62.8,"漲幅":"-0.8"},{"代號":"3022","名稱":"威強電","貝氏評分":4.53,"分類":"long_term","現價":69.0,"漲幅":"-6.4"},{"代號":"3019","名稱":"亞光","貝氏評分":4.53,"分類":"long_term","現價":146.5,"漲幅":"+1.7"},{"代號":"3011","名稱":"今皓","貝氏評分":4.53,"分類":"long_term","現價":13.75,"漲幅":"+2.2"},{"代號":"3008","名稱":"大立光","貝氏評分":4.53,"分類":"long_term","現價":2545.0,"漲幅":"-1.0"},{"代號":"3005","名稱":"神基","貝氏評分":4.53,"分類":"long_term","現價":99.8,"漲幅":"+1.6"},{"代號":"3004","名稱":"豐達科","貝氏評分":4.53,"分類":"long_term","現價":114.5,"漲幅":"-2.1"},{"代號":"2915","名稱":"潤泰全","貝氏評分":4.53,"分類":"long_term","現價":43.65,"漲幅":"+0.9"},{"代號":"2913","名稱":"農林","貝氏評分":4.53,"分類":"long_term","現價":11.3,"漲幅":"+0.4"},{"代號":"2912","名稱":"統一超","貝氏評分":4.53,"分類":"long_term","現價":227.5,"漲幅":"-1.9"},{"代號":"2903","名稱":"遠百","貝氏評分":4.53,"分類":"long_term","現價":22.25,"漲幅":"+0.5"},{"代號":"2897","名稱":"王道銀行","貝氏評分":4.53,"分類":"long_term","現價":10.25,"漲幅":"+1.0"},{"代號":"2890","名稱":"永豐金","貝氏評分":4.53,"分類":"long_term","現價":30.6,"漲幅":"-1.3"},{"代號":"2889","名稱":"國票金","貝氏評分":4.53,"分類":"long_term","現價":14.75,"漲幅":"+0.7"},{"代號":"2887","名稱":"台新新光金","貝氏評分":4.53,"分類":"long_term","現價":23.45,"漲幅":"-1.5"},{"代號":"2886","名稱":"兆豐金","貝氏評分":4.53,"分類":"long_term","現價":40.1,"漲幅":"-0.2"},{"代號":"2885","名稱":"元大金","貝氏評分":4.53,"分類":"long_term","現價":56.5,"漲幅":"+0.0"},{"代號":"2884","名稱":"玉山金","貝氏評分":4.53,"分類":"long_term","現價":32.3,"漲幅":"-0.6"},{"代號":"2882","名稱":"國泰金","貝氏評分":4.53,"分類":"long_term","現價":78.4,"漲幅":"-2.0"},{"代號":"2880","名稱":"華南金","貝氏評分":4.53,"分類":"long_term","現價":33.25,"漲幅":"-0.2"},{"代號":"2867","名稱":"三商壽","貝氏評分":4.53,"分類":"long_term","現價":7.82,"漲幅":"-0.1"},{"代號":"2845","名稱":"遠東銀","貝氏評分":4.53,"分類":"long_term","現價":12.2,"漲幅":"+0.0"},{"代號":"2838","名稱":"聯邦銀","貝氏評分":4.53,"分類":"long_term","現價":20.75,"漲幅":"+1.0"},{"代號":"2834","名稱":"臺企銀","貝氏評分":4.53,"分類":"long_term","現價":16.15,"漲幅":"-0.6"},{"代號":"2820","名稱":"華票","貝氏評分":4.53,"分類":"long_term","現價":17.1,"漲幅":"+1.5"},{"代號":"2801","名稱":"彰銀","貝氏評分":4.53,"分類":"long_term","現價":20.9,"漲幅":"-0.2"},{"代號":"2645","名稱":"長榮航太","貝氏評分":4.53,"分類":"long_term","現價":154.5,"漲幅":"-5.8"},{"代號":"2637","名稱":"慧洋-KY","貝氏評分":4.53,"分類":"long_term","現價":74.5,"漲幅":"-0.1"},{"代號":"2634","名稱":"漢翔","貝氏評分":4.53,"分類":"long_term","現價":47.2,"漲幅":"-5.8"},{"代號":"2633","名稱":"台灣高鐵","貝氏評分":4.53,"分類":"long_term","現價":26.75,"漲幅":"+0.8"},{"代號":"2630","名稱":"亞航","貝氏評分":4.53,"分類":"long_term","現價":45.6,"漲幅":"-9.5"},{"代號":"2615","名稱":"萬海","貝氏評分":4.53,"分類":"long_term","現價":78.5,"漲幅":"+2.6"},{"代號":"2612","名稱":"中航","貝氏評分":4.53,"分類":"long_term","現價":57.3,"漲幅":"-1.0"},{"代號":"2609","名稱":"陽明","貝氏評分":4.53,"分類":"long_term","現價":50.8,"漲幅":"+1.8"},{"代號":"2603","名稱":"長榮","貝氏評分":4.53,"分類":"long_term","現價":214.0,"漲幅":"+1.2"},{"代號":"2601","名稱":"益航","貝氏評分":4.53,"分類":"long_term","現價":4.97,"漲幅":"+1.2"},{"代號":"2543","名稱":"皇昌","貝氏評分":4.53,"分類":"long_term","現價":43.25,"漲幅":"+2.5"},{"代號":"2540","名稱":"愛山林","貝氏評分":4.53,"分類":"long_term","現價":51.5,"漲幅":"+0.4"},{"代號":"2539","名稱":"櫻花建","貝氏評分":4.53,"分類":"long_term","現價":39.75,"漲幅":"+1.0"},{"代號":"2538","名稱":"基泰","貝氏評分":4.53,"分類":"long_term","現價":9.8,"漲幅":"-1.6"},{"代號":"2537","名稱":"聯上發","貝氏評分":4.53,"分類":"long_term","現價":10.25,"漲幅":"+0.0"},{"代號":"2535","名稱":"達欣工","貝氏評分":4.53,"分類":"long_term","現價":74.4,"漲幅":"+0.3"},{"代號":"2534","名稱":"宏盛","貝氏評分":4.53,"分類":"long_term","現價":18.75,"漲幅":"+0.0"},{"代號":"2527","名稱":"宏璟","貝氏評分":4.53,"分類":"long_term","現價":34.35,"漲幅":"-0.9"},{"代號":"2515","名稱":"中工","貝氏評分":4.53,"分類":"long_term","現價":13.2,"漲幅":"+0.8"},{"代號":"2505","名稱":"國揚","貝氏評分":4.53,"分類":"long_term","現價":17.65,"漲幅":"-0.6"},{"代號":"2501","名稱":"國建","貝氏評分":4.53,"分類":"long_term","現價":22.65,"漲幅":"-1.5"},{"代號":"2498","名稱":"宏達電","貝氏評分":4.53,"分類":"long_term","現價":40.25,"漲幅":"+2.3"},{"代號":"2495","名稱":"普安","貝氏評分":4.53,"分類":"long_term","現價":36.35,"漲幅":"-1.2"},{"代號":"2493","名稱":"揚博","貝氏評分":4.53,"分類":"long_term","現價":129.5,"漲幅":"-1.5"},{"代號":"2486","名稱":"一詮","貝氏評分":4.53,"分類":"long_term","現價":281.5,"漲幅":"+0.0"},{"代號":"2485","名稱":"兆赫","貝氏評分":4.53,"分類":"long_term","現價":67.6,"漲幅":"-1.5"},{"代號":"2484","名稱":"希華","貝氏評分":4.53,"分類":"long_term","現價":39.6,"漲幅":"-5.3"},{"代號":"2478","名稱":"大毅","貝氏評分":4.53,"分類":"long_term","現價":77.9,"漲幅":"-0.3"},{"代號":"2474","名稱":"可成","貝氏評分":4.53,"分類":"long_term","現價":208.0,"漲幅":"+1.5"},{"代號":"2468","名稱":"華經","貝氏評分":4.53,"分類":"long_term","現價":34.2,"漲幅":"-4.5"},{"代號":"2466","名稱":"冠西電","貝氏評分":4.53,"分類":"long_term","現價":51.6,"漲幅":"+2.4"},{"代號":"2462","名稱":"良得電","貝氏評分":4.53,"分類":"long_term","現價":21.15,"漲幅":"-3.2"},{"代號":"2449","名稱":"京元電子","貝氏評分":4.53,"分類":"long_term","現價":299.5,"漲幅":"-3.7"},{"代號":"2442","名稱":"新美齊","貝氏評分":4.53,"分類":"long_term","現價":18.8,"漲幅":"+0.8"},{"代號":"2441","名稱":"超豐","貝氏評分":4.53,"分類":"long_term","現價":92.4,"漲幅":"+2.1"},{"代號":"2440","名稱":"太空梭","貝氏評分":4.53,"分類":"long_term","現價":16.95,"漲幅":"+1.2"},{"代號":"2439","名稱":"美律","貝氏評分":4.53,"分類":"long_term","現價":86.4,"漲幅":"+0.2"},{"代號":"2431","名稱":"聯昌","貝氏評分":4.53,"分類":"long_term","現價":10.55,"漲幅":"-2.3"},{"代號":"2427","名稱":"三商電","貝氏評分":4.53,"分類":"long_term","現價":21.8,"漲幅":"+1.2"},{"代號":"2426","名稱":"鼎元","貝氏評分":4.53,"分類":"long_term","現價":66.7,"漲幅":"-1.2"},{"代號":"2421","名稱":"建準","貝氏評分":4.53,"分類":"long_term","現價":151.0,"漲幅":"+1.3"},{"代號":"2420","名稱":"新巨","貝氏評分":4.53,"分類":"long_term","現價":56.5,"漲幅":"+1.8"},{"代號":"2419","名稱":"仲琦","貝氏評分":4.53,"分類":"long_term","現價":30.0,"漲幅":"-0.2"},{"代號":"2417","名稱":"圓剛","貝氏評分":4.53,"分類":"long_term","現價":51.0,"漲幅":"+1.2"},{"代號":"2413","名稱":"環科","貝氏評分":4.53,"分類":"long_term","現價":45.4,"漲幅":"-1.5"},{"代號":"2412","名稱":"中華電","貝氏評分":4.53,"分類":"long_term","現價":135.5,"漲幅":"-0.7"},{"代號":"2402","名稱":"毅嘉","貝氏評分":4.53,"分類":"long_term","現價":69.0,"漲幅":"+1.5"},{"代號":"2401","名稱":"凌陽","貝氏評分":4.53,"分類":"long_term","現價":25.65,"漲幅":"+1.4"},{"代號":"2393","名稱":"億光","貝氏評分":4.53,"分類":"long_term","現價":73.8,"漲幅":"+0.1"},{"代號":"2392","名稱":"正崴","貝氏評分":4.53,"分類":"long_term","現價":39.15,"漲幅":"+0.9"},{"代號":"2387","名稱":"精元","貝氏評分":4.53,"分類":"long_term","現價":40.0,"漲幅":"-1.8"},{"代號":"2383","名稱":"台光電","貝氏評分":4.53,"分類":"long_term","現價":4850.0,"漲幅":"+2.1"},{"代號":"2374","名稱":"佳能","貝氏評分":4.53,"分類":"long_term","現價":80.5,"漲幅":"+2.5"},{"代號":"2371","名稱":"大同","貝氏評分":4.53,"分類":"long_term","現價":30.55,"漲幅":"+0.0"},{"代號":"2369","名稱":"菱生","貝氏評分":4.53,"分類":"long_term","現價":31.0,"漲幅":"+1.0"},{"代號":"2367","名稱":"燿華","貝氏評分":4.53,"分類":"long_term","現價":62.6,"漲幅":"+1.5"},{"代號":"2365","名稱":"昆盈","貝氏評分":4.53,"分類":"long_term","現價":36.95,"漲幅":"+1.9"},{"代號":"2362","名稱":"藍天","貝氏評分":4.53,"分類":"long_term","現價":40.35,"漲幅":"+1.1"},{"代號":"2359","名稱":"所羅門","貝氏評分":4.53,"分類":"long_term","現價":122.5,"漲幅":"+2.5"},{"代號":"2355","名稱":"敬鵬","貝氏評分":4.53,"分類":"long_term","現價":52.7,"漲幅":"+1.7"},{"代號":"2349","名稱":"錸德","貝氏評分":4.53,"分類":"long_term","現價":12.6,"漲幅":"+1.2"},{"代號":"2340","名稱":"台亞","貝氏評分":4.53,"分類":"long_term","現價":37.35,"漲幅":"+0.1"},{"代號":"2338","名稱":"光罩","貝氏評分":4.53,"分類":"long_term","現價":50.0,"漲幅":"-2.9"},{"代號":"2331","名稱":"精英","貝氏評分":4.53,"分類":"long_term","現價":20.9,"漲幅":"+2.7"},{"代號":"2330","名稱":"台積電","貝氏評分":4.53,"分類":"long_term","現價":2235.0,"漲幅":"-2.4"},{"代號":"2329","名稱":"華泰","貝氏評分":4.53,"分類":"long_term","現價":59.0,"漲幅":"-1.2"},{"代號":"2323","名稱":"中環","貝氏評分":4.53,"分類":"long_term","現價":10.6,"漲幅":"+0.5"},{"代號":"2313","名稱":"華通","貝氏評分":4.53,"分類":"long_term","現價":242.0,"漲幅":"-4.5"},{"代號":"2243","名稱":"宏旭-KY","貝氏評分":4.53,"分類":"long_term","現價":21.65,"漲幅":"-9.0"},{"代號":"2231","名稱":"為升","貝氏評分":4.53,"分類":"long_term","現價":109.0,"漲幅":"-6.0"},{"代號":"2208","名稱":"台船","貝氏評分":4.53,"分類":"long_term","現價":20.2,"漲幅":"-6.9"},{"代號":"2206","名稱":"三陽工業","貝氏評分":4.53,"分類":"long_term","現價":58.1,"漲幅":"+0.2"},{"代號":"2201","名稱":"裕隆","貝氏評分":4.53,"分類":"long_term","現價":27.75,"漲幅":"+0.0"},{"代號":"2106","名稱":"建大","貝氏評分":4.53,"分類":"long_term","現價":17.35,"漲幅":"+0.9"},{"代號":"2104","名稱":"國際中橡","貝氏評分":4.53,"分類":"long_term","現價":10.2,"漲幅":"-1.0"},{"代號":"2101","名稱":"南港","貝氏評分":4.53,"分類":"long_term","現價":33.6,"漲幅":"-2.6"},{"代號":"2034","名稱":"允強","貝氏評分":4.53,"分類":"long_term","現價":21.05,"漲幅":"-0.7"},{"代號":"2031","名稱":"新光鋼","貝氏評分":4.53,"分類":"long_term","現價":39.9,"漲幅":"+0.6"},{"代號":"2023","名稱":"燁輝","貝氏評分":4.53,"分類":"long_term","現價":13.95,"漲幅":"-3.1"},{"代號":"2010","名稱":"春源","貝氏評分":4.53,"分類":"long_term","現價":23.4,"漲幅":"+0.0"},{"代號":"2006","名稱":"東和鋼鐵","貝氏評分":4.53,"分類":"long_term","現價":67.7,"漲幅":"+0.4"},{"代號":"2002","名稱":"中鋼","貝氏評分":4.53,"分類":"long_term","現價":18.6,"漲幅":"-0.8"},{"代號":"1907","名稱":"永豐餘","貝氏評分":4.53,"分類":"long_term","現價":24.05,"漲幅":"+0.0"},{"代號":"1905","名稱":"華紙","貝氏評分":4.53,"分類":"long_term","現價":12.4,"漲幅":"-0.4"},{"代號":"1904","名稱":"正隆","貝氏評分":4.53,"分類":"long_term","現價":17.5,"漲幅":"+0.3"},{"代號":"1810","名稱":"和成","貝氏評分":4.53,"分類":"long_term","現價":18.15,"漲幅":"-1.9"},{"代號":"1808","名稱":"潤隆","貝氏評分":4.53,"分類":"long_term","現價":28.9,"漲幅":"+1.6"},{"代號":"1802","名稱":"台玻","貝氏評分":4.53,"分類":"long_term","現價":69.9,"漲幅":"+1.5"},{"代號":"1773","名稱":"勝一","貝氏評分":4.53,"分類":"long_term","現價":176.0,"漲幅":"+2.0"},{"代號":"1736","名稱":"喬山","貝氏評分":4.53,"分類":"long_term","現價":124.0,"漲幅":"-0.8"},{"代號":"1722","名稱":"台肥","貝氏評分":4.53,"分類":"long_term","現價":47.1,"漲幅":"+1.2"},{"代號":"1712","名稱":"興農","貝氏評分":4.53,"分類":"long_term","現價":41.45,"漲幅":"-1.2"},{"代號":"1711","名稱":"永光","貝氏評分":4.53,"分類":"long_term","現價":54.2,"漲幅":"-5.7"},{"代號":"1710","名稱":"東聯","貝氏評分":4.53,"分類":"long_term","現價":12.45,"漲幅":"+2.9"},{"代號":"1709","名稱":"和益","貝氏評分":4.53,"分類":"long_term","現價":18.5,"漲幅":"-0.8"},{"代號":"1618","名稱":"合機","貝氏評分":4.53,"分類":"long_term","現價":38.6,"漲幅":"-1.5"},{"代號":"1616","名稱":"億泰","貝氏評分":4.53,"分類":"long_term","現價":22.35,"漲幅":"+0.9"},{"代號":"1612","名稱":"宏泰","貝氏評分":4.53,"分類":"long_term","現價":37.25,"漲幅":"+1.5"},{"代號":"1582","名稱":"信錦","貝氏評分":4.53,"分類":"long_term","現價":89.5,"漲幅":"+1.9"},{"代號":"1536","名稱":"和大","貝氏評分":4.53,"分類":"long_term","現價":55.3,"漲幅":"+3.0"},{"代號":"1532","名稱":"勤美","貝氏評分":4.53,"分類":"long_term","現價":20.6,"漲幅":"-0.2"},{"代號":"1529","名稱":"樂事綠能","貝氏評分":4.53,"分類":"long_term","現價":22.45,"漲幅":"-2.0"},{"代號":"1528","名稱":"恩德","貝氏評分":4.53,"分類":"long_term","現價":26.15,"漲幅":"-1.5"},{"代號":"1522","名稱":"堤維西","貝氏評分":4.53,"分類":"long_term","現價":31.6,"漲幅":"-1.6"},{"代號":"1513","名稱":"中興電","貝氏評分":4.53,"分類":"long_term","現價":158.5,"漲幅":"+0.3"},{"代號":"1464","名稱":"得力","貝氏評分":4.53,"分類":"long_term","現價":10.05,"漲幅":"+0.5"},{"代號":"1460","名稱":"宏遠","貝氏評分":4.53,"分類":"long_term","現價":7.19,"漲幅":"-0.8"},{"代號":"1447","名稱":"力鵬","貝氏評分":4.53,"分類":"long_term","現價":4.96,"漲幅":"+0.2"},{"代號":"1434","名稱":"福懋","貝氏評分":4.53,"分類":"long_term","現價":15.9,"漲幅":"+0.3"},{"代號":"1409","名稱":"新纖","貝氏評分":4.53,"分類":"long_term","現價":17.2,"漲幅":"+2.4"},{"代號":"1402","名稱":"遠東新","貝氏評分":4.53,"分類":"long_term","現價":26.35,"漲幅":"+1.0"},{"代號":"1326","名稱":"台化","貝氏評分":4.53,"分類":"long_term","現價":47.8,"漲幅":"+1.8"},{"代號":"1316","名稱":"上曜","貝氏評分":4.53,"分類":"long_term","現價":11.45,"漲幅":"+2.2"},{"代號":"1314","名稱":"中石化","貝氏評分":4.53,"分類":"long_term","現價":7.09,"漲幅":"-0.7"},{"代號":"1312","名稱":"國喬","貝氏評分":4.53,"分類":"long_term","現價":11.8,"漲幅":"+1.7"},{"代號":"1310","名稱":"台苯","貝氏評分":4.53,"分類":"long_term","現價":8.64,"漲幅":"+0.1"},{"代號":"1309","名稱":"台達化","貝氏評分":4.53,"分類":"long_term","現價":16.9,"漲幅":"+0.3"},{"代號":"1308","名稱":"亞聚","貝氏評分":4.53,"分類":"long_term","現價":13.65,"漲幅":"+1.9"},{"代號":"1304","名稱":"台聚","貝氏評分":4.53,"分類":"long_term","現價":13.05,"漲幅":"+2.8"},{"代號":"1301","名稱":"台塑","貝氏評分":4.53,"分類":"long_term","現價":49.25,"漲幅":"+1.4"},{"代號":"8937","名稱":"合騏","貝氏評分":4.53,"分類":"long_term","現價":34.5,"漲幅":"+1.0"},{"代號":"8936","名稱":"國統","貝氏評分":4.53,"分類":"long_term","現價":50.6,"漲幅":"-2.7"},{"代號":"8932","名稱":"智通*","貝氏評分":4.53,"分類":"long_term","現價":92.5,"漲幅":"+0.0"},{"代號":"8927","名稱":"北基","貝氏評分":4.53,"分類":"long_term","現價":20.0,"漲幅":"-1.5"},{"代號":"8924","名稱":"大田","貝氏評分":4.53,"分類":"long_term","現價":64.0,"漲幅":"+0.5"},{"代號":"8436","名稱":"大江","貝氏評分":4.53,"分類":"long_term","現價":120.5,"漲幅":"-1.2"},{"代號":"8431","名稱":"匯鑽科","貝氏評分":4.53,"分類":"long_term","現價":60.9,"漲幅":"+0.3"},{"代號":"8415","名稱":"大國鋼","貝氏評分":4.53,"分類":"long_term","現價":34.55,"漲幅":"+0.6"},{"代號":"8383","名稱":"千附","貝氏評分":4.53,"分類":"long_term","現價":56.0,"漲幅":"-6.8"},{"代號":"8234","名稱":"新漢","貝氏評分":4.53,"分類":"long_term","現價":71.2,"漲幅":"+1.0"},{"代號":"8183","名稱":"精星","貝氏評分":4.53,"分類":"long_term","現價":31.7,"漲幅":"-1.7"},{"代號":"8182","名稱":"加高","貝氏評分":4.53,"分類":"long_term","現價":37.4,"漲幅":"-5.3"},{"代號":"8155","名稱":"博智","貝氏評分":4.53,"分類":"long_term","現價":420.0,"漲幅":"-5.4"},{"代號":"8111","名稱":"立碁","貝氏評分":4.53,"分類":"long_term","現價":66.2,"漲幅":"-0.9"},{"代號":"8096","名稱":"擎亞","貝氏評分":4.53,"分類":"long_term","現價":98.3,"漲幅":"+2.5"},{"代號":"8085","名稱":"福華","貝氏評分":4.53,"分類":"long_term","現價":12.15,"漲幅":"-1.2"},{"代號":"8074","名稱":"鉅橡","貝氏評分":4.53,"分類":"long_term","現價":83.0,"漲幅":"+1.1"},{"代號":"8071","名稱":"能率網通","貝氏評分":4.53,"分類":"long_term","現價":16.8,"漲幅":"+0.3"},{"代號":"8054","名稱":"安國","貝氏評分":4.53,"分類":"long_term","現價":103.5,"漲幅":"-2.8"},{"代號":"8043","名稱":"蜜望實","貝氏評分":4.53,"分類":"long_term","現價":84.7,"漲幅":"-5.7"},{"代號":"8040","名稱":"九暘","貝氏評分":4.53,"分類":"long_term","現價":78.0,"漲幅":"+0.3"},{"代號":"8038","名稱":"長園科","貝氏評分":4.53,"分類":"long_term","現價":42.85,"漲幅":"-3.5"},{"代號":"7777","名稱":"能率亞洲","貝氏評分":4.53,"分類":"long_term","現價":28.75,"漲幅":"+0.0"},{"代號":"7717","名稱":"萊德光電-KY","貝氏評分":4.53,"分類":"long_term","現價":676.0,"漲幅":"+1.2"},{"代號":"7547","名稱":"碩網","貝氏評分":4.53,"分類":"long_term","現價":71.2,"漲幅":"-2.3"},{"代號":"6903","名稱":"巨漢","貝氏評分":4.53,"分類":"long_term","現價":405.0,"漲幅":"-4.0"},{"代號":"6877","名稱":"鏵友益","貝氏評分":4.53,"分類":"long_term","現價":163.0,"漲幅":"-1.8"},{"代號":"6829","名稱":"千附精密","貝氏評分":4.53,"分類":"long_term","現價":225.5,"漲幅":"-10.0"},{"代號":"6823","名稱":"濾能","貝氏評分":4.53,"分類":"long_term","現價":88.8,"漲幅":"+0.1"},{"代號":"6821","名稱":"聯寶","貝氏評分":4.53,"分類":"long_term","現價":50.0,"漲幅":"-2.0"},{"代號":"6735","名稱":"美達科技","貝氏評分":4.53,"分類":"long_term","現價":125.0,"漲幅":"-1.2"},{"代號":"6683","名稱":"雍智科技","貝氏評分":4.53,"分類":"long_term","現價":2270.0,"漲幅":"+2.7"},{"代號":"6667","名稱":"信紘科","貝氏評分":4.53,"分類":"long_term","現價":262.5,"漲幅":"+0.4"},{"代號":"6664","名稱":"群翊","貝氏評分":4.53,"分類":"long_term","現價":439.5,"漲幅":"-0.8"},{"代號":"6613","名稱":"朋億*","貝氏評分":4.53,"分類":"long_term","現價":240.5,"漲幅":"-2.0"},{"代號":"6603","名稱":"富強鑫","貝氏評分":4.53,"分類":"long_term","現價":23.9,"漲幅":"-1.2"},{"代號":"6588","名稱":"東典光電","貝氏評分":4.53,"分類":"long_term","現價":145.0,"漲幅":"+1.4"},{"代號":"6584","名稱":"南俊國際","貝氏評分":4.53,"分類":"long_term","現價":687.0,"漲幅":"+2.7"},{"代號":"6568","名稱":"宏觀","貝氏評分":4.53,"分類":"long_term","現價":226.0,"漲幅":"-3.0"},{"代號":"6547","名稱":"高端疫苗","貝氏評分":4.53,"分類":"long_term","現價":48.9,"漲幅":"+0.7"},{"代號":"6530","名稱":"創威","貝氏評分":4.53,"分類":"long_term","現價":110.5,"漲幅":"+2.3"},{"代號":"1229","名稱":"聯華","貝氏評分":4.53,"分類":"long_term","現價":41.1,"漲幅":"-2.5"},{"代號":"1227","名稱":"佳格","貝氏評分":4.53,"分類":"long_term","現價":28.85,"漲幅":"-0.7"},{"代號":"1218","名稱":"泰山","貝氏評分":4.53,"分類":"long_term","現價":19.15,"漲幅":"+0.3"},{"代號":"1215","名稱":"卜蜂","貝氏評分":4.53,"分類":"long_term","現價":133.0,"漲幅":"-0.7"},{"代號":"1210","名稱":"大成","貝氏評分":4.53,"分類":"long_term","現價":52.3,"漲幅":"-1.1"},{"代號":"1104","名稱":"環泥","貝氏評分":4.53,"分類":"long_term","現價":28.3,"漲幅":"+0.0"},{"代號":"1102","名稱":"亞泥","貝氏評分":4.53,"分類":"long_term","現價":34.65,"漲幅":"-0.9"},{"代號":"6485","名稱":"點序","貝氏評分":4.53,"分類":"long_term","現價":84.2,"漲幅":"+1.9"},{"代號":"6469","名稱":"大樹","貝氏評分":4.53,"分類":"long_term","現價":73.5,"漲幅":"-3.8"},{"代號":"6462","名稱":"神盾","貝氏評分":4.53,"分類":"long_term","現價":129.5,"漲幅":"+2.4"},{"代號":"6419","名稱":"京晨科","貝氏評分":4.53,"分類":"long_term","現價":137.0,"漲幅":"-4.9"},{"代號":"6290","名稱":"良維","貝氏評分":4.53,"分類":"long_term","現價":275.5,"漲幅":"-0.4"},{"代號":"6275","名稱":"元山","貝氏評分":4.53,"分類":"long_term","現價":50.4,"漲幅":"-5.3"},{"代號":"6270","名稱":"倍微","貝氏評分":4.53,"分類":"long_term","現價":27.3,"漲幅":"-1.3"},{"代號":"6245","名稱":"立端","貝氏評分":4.53,"分類":"long_term","現價":81.3,"漲幅":"+1.5"},{"代號":"6234","名稱":"高僑","貝氏評分":4.53,"分類":"long_term","現價":54.0,"漲幅":"-6.6"},{"代號":"6233","名稱":"旺玖","貝氏評分":4.53,"分類":"long_term","現價":26.5,"漲幅":"-1.1"},{"代號":"6223","名稱":"旺矽","貝氏評分":4.53,"分類":"long_term","現價":4985.0,"漲幅":"-0.8"},{"代號":"6218","名稱":"豪勉","貝氏評分":4.53,"分類":"long_term","現價":37.3,"漲幅":"-4.4"},{"代號":"6186","名稱":"新潤","貝氏評分":4.53,"分類":"long_term","現價":39.65,"漲幅":"-0.8"},{"代號":"6167","名稱":"久正","貝氏評分":4.53,"分類":"long_term","現價":12.0,"漲幅":"-1.6"},{"代號":"6146","名稱":"耕興","貝氏評分":4.53,"分類":"long_term","現價":213.5,"漲幅":"-1.8"},{"代號":"6129","名稱":"普誠","貝氏評分":4.53,"分類":"long_term","現價":16.4,"漲幅":"+1.5"},{"代號":"6127","名稱":"九豪","貝氏評分":4.53,"分類":"long_term","現價":47.5,"漲幅":"-1.1"},{"代號":"6125","名稱":"廣運","貝氏評分":4.53,"分類":"long_term","現價":59.7,"漲幅":"+1.0"},{"代號":"5530","名稱":"龍巖","貝氏評分":4.53,"分類":"long_term","現價":45.1,"漲幅":"-0.3"},{"代號":"5498","名稱":"凱崴","貝氏評分":4.53,"分類":"long_term","現價":69.1,"漲幅":"-4.0"},{"代號":"5475","名稱":"德宏","貝氏評分":4.53,"分類":"long_term","現價":331.5,"漲幅":"+2.0"},{"代號":"5474","名稱":"聰泰","貝氏評分":4.53,"分類":"long_term","現價":164.5,"漲幅":"-0.6"},{"代號":"5439","名稱":"高技","貝氏評分":4.53,"分類":"long_term","現價":391.0,"漲幅":"+0.8"},{"代號":"5386","名稱":"青雲","貝氏評分":4.53,"分類":"long_term","現價":439.5,"漲幅":"-6.5"},{"代號":"5381","名稱":"合正","貝氏評分":4.53,"分類":"long_term","現價":23.8,"漲幅":"-2.1"},{"代號":"5371","名稱":"中光電","貝氏評分":4.53,"分類":"long_term","現價":70.5,"漲幅":"-5.1"},{"代號":"5340","名稱":"建榮","貝氏評分":4.53,"分類":"long_term","現價":111.5,"漲幅":"+0.0"},{"代號":"5314","名稱":"世紀*","貝氏評分":4.53,"分類":"long_term","現價":72.6,"漲幅":"-2.0"},{"代號":"5302","名稱":"太欣","貝氏評分":4.53,"分類":"long_term","現價":11.4,"漲幅":"-3.4"},{"代號":"5278","名稱":"尚凡*","貝氏評分":4.53,"分類":"long_term","現價":22.6,"漲幅":"-1.7"},{"代號":"5272","名稱":"笙科","貝氏評分":4.53,"分類":"long_term","現價":23.45,"漲幅":"-3.1"},{"代號":"5213","名稱":"亞昕","貝氏評分":4.53,"分類":"long_term","現價":25.85,"漲幅":"-0.4"},{"代號":"5210","名稱":"寶碩","貝氏評分":4.53,"分類":"long_term","現價":27.8,"漲幅":"-0.9"},{"代號":"4979","名稱":"華星光","貝氏評分":4.53,"分類":"long_term","現價":672.0,"漲幅":"+1.8"},{"代號":"4953","名稱":"緯軟","貝氏評分":4.53,"分類":"long_term","現價":118.5,"漲幅":"-2.1"},{"代號":"4951","名稱":"精拓科","貝氏評分":4.53,"分類":"long_term","現價":121.5,"漲幅":"-2.0"},{"代號":"4939","名稱":"亞電","貝氏評分":4.53,"分類":"long_term","現價":40.1,"漲幅":"-3.4"},{"代號":"4933","名稱":"友輝","貝氏評分":4.53,"分類":"long_term","現價":69.8,"漲幅":"+1.0"},{"代號":"4909","名稱":"新復興","貝氏評分":4.53,"分類":"long_term","現價":53.9,"漲幅":"-1.6"},{"代號":"4908","名稱":"前鼎","貝氏評分":4.53,"分類":"long_term","現價":227.5,"漲幅":"-0.9"},{"代號":"4903","名稱":"聯光通","貝氏評分":4.53,"分類":"long_term","現價":43.3,"漲幅":"+0.7"},{"代號":"4768","名稱":"晶呈科技","貝氏評分":4.53,"分類":"long_term","現價":488.5,"漲幅":"-3.6"},{"代號":"4745","名稱":"合富-KY","貝氏評分":4.53,"分類":"long_term","現價":20.15,"漲幅":"+0.5"},{"代號":"4714","名稱":"永捷","貝氏評分":4.53,"分類":"long_term","現價":14.8,"漲幅":"+0.3"},{"代號":"4577","名稱":"達航科技","貝氏評分":4.53,"分類":"long_term","現價":139.5,"漲幅":"-1.8"},{"代號":"4543","名稱":"萬在","貝氏評分":4.53,"分類":"long_term","現價":38.0,"漲幅":"-5.9"},{"代號":"4542","名稱":"科嶠","貝氏評分":4.53,"分類":"long_term","現價":194.5,"漲幅":"-0.8"},{"代號":"4541","名稱":"晟田","貝氏評分":4.53,"分類":"long_term","現價":45.7,"漲幅":"-4.7"},{"代號":"4534","名稱":"慶騰","貝氏評分":4.53,"分類":"long_term","現價":23.05,"漲幅":"-3.8"},{"代號":"4510","名稱":"高鋒","貝氏評分":4.53,"分類":"long_term","現價":47.15,"漲幅":"+0.3"},{"代號":"4303","名稱":"信立","貝氏評分":4.53,"分類":"long_term","現價":52.0,"漲幅":"-0.6"},{"代號":"4174","名稱":"浩鼎","貝氏評分":4.53,"分類":"long_term","現價":33.35,"漲幅":"-2.1"},{"代號":"4167","名稱":"松瑞藥","貝氏評分":4.53,"分類":"long_term","現價":19.0,"漲幅":"+1.3"},{"代號":"4114","名稱":"健喬","貝氏評分":4.53,"分類":"long_term","現價":31.0,"漲幅":"+0.2"},{"代號":"4105","名稱":"東洋","貝氏評分":4.53,"分類":"long_term","現價":75.2,"漲幅":"-0.3"},{"代號":"3710","名稱":"連展投控","貝氏評分":4.53,"分類":"long_term","現價":6.01,"漲幅":"-4.5"},{"代號":"3707","名稱":"漢磊","貝氏評分":4.53,"分類":"long_term","現價":74.9,"漲幅":"+2.3"},{"代號":"3693","名稱":"營邦","貝氏評分":4.53,"分類":"long_term","現價":582.0,"漲幅":"-3.5"},{"代號":"3689","名稱":"湧德","貝氏評分":4.53,"分類":"long_term","現價":124.5,"漲幅":"-1.2"},{"代號":"3630","名稱":"新鉅科","貝氏評分":4.53,"分類":"long_term","現價":26.55,"漲幅":"-1.7"},{"代號":"3625","名稱":"西勝","貝氏評分":4.53,"分類":"long_term","現價":15.1,"漲幅":"-1.3"},{"代號":"3615","名稱":"安可","貝氏評分":4.53,"分類":"long_term","現價":33.5,"漲幅":"-1.8"},{"代號":"3567","名稱":"逸昌","貝氏評分":4.53,"分類":"long_term","現價":29.35,"漲幅":"-1.5"},{"代號":"3548","名稱":"兆利","貝氏評分":4.53,"分類":"long_term","現價":100.5,"漲幅":"+0.5"},{"代號":"3529","名稱":"力旺","貝氏評分":4.53,"分類":"long_term","現價":4460.0,"漲幅":"+2.9"},{"代號":"3511","名稱":"矽瑪","貝氏評分":4.53,"分類":"long_term","現價":21.5,"漲幅":"-2.3"},{"代號":"3483","名稱":"力致","貝氏評分":4.53,"分類":"long_term","現價":90.9,"漲幅":"-0.4"},{"代號":"3479","名稱":"安勤","貝氏評分":4.53,"分類":"long_term","現價":97.1,"漲幅":"+0.9"},{"代號":"3466","名稱":"德晉","貝氏評分":4.53,"分類":"long_term","現價":39.75,"漲幅":"-3.3"},{"代號":"3444","名稱":"利機","貝氏評分":4.53,"分類":"long_term","現價":89.2,"漲幅":"+0.2"},{"代號":"3402","名稱":"漢科","貝氏評分":4.53,"分類":"long_term","現價":139.5,"漲幅":"+0.4"},{"代號":"3388","名稱":"崇越電","貝氏評分":4.53,"分類":"long_term","現價":110.0,"漲幅":"+0.5"},{"代號":"3372","名稱":"典範","貝氏評分":4.53,"分類":"long_term","現價":19.75,"漲幅":"+0.0"},{"代號":"3362","名稱":"先進光","貝氏評分":4.53,"分類":"long_term","現價":102.0,"漲幅":"-2.4"},{"代號":"3339","名稱":"泰谷","貝氏評分":4.53,"分類":"long_term","現價":54.0,"漲幅":"-8.2"},{"代號":"3324","名稱":"雙鴻","貝氏評分":4.53,"分類":"long_term","現價":1070.0,"漲幅":"+0.5"},{"代號":"3322","名稱":"建舜電","貝氏評分":4.53,"分類":"long_term","現價":13.15,"漲幅":"+0.4"},{"代號":"3303","名稱":"岱稜","貝氏評分":4.53,"分類":"long_term","現價":52.0,"漲幅":"+0.0"},{"代號":"3294","名稱":"英濟","貝氏評分":4.53,"分類":"long_term","現價":30.7,"漲幅":"+1.5"},{"代號":"3293","名稱":"鈊象","貝氏評分":4.53,"分類":"long_term","現價":731.0,"漲幅":"-0.5"},{"代號":"3265","名稱":"台星科","貝氏評分":4.53,"分類":"long_term","現價":180.5,"漲幅":"+0.8"},{"代號":"3264","名稱":"欣銓","貝氏評分":4.53,"分類":"long_term","現價":225.5,"漲幅":"+0.7"},{"代號":"3260","名稱":"威剛","貝氏評分":4.53,"分類":"long_term","現價":457.0,"漲幅":"+1.9"},{"代號":"3234","名稱":"光環","貝氏評分":4.53,"分類":"long_term","現價":97.5,"漲幅":"-0.5"},{"代號":"3230","名稱":"錦明","貝氏評分":4.53,"分類":"long_term","現價":32.55,"漲幅":"-4.8"},{"代號":"3221","名稱":"台嘉碩","貝氏評分":4.53,"分類":"long_term","現價":43.8,"漲幅":"-3.1"},{"代號":"3217","名稱":"優群","貝氏評分":4.53,"分類":"long_term","現價":178.0,"漲幅":"+1.1"},{"代號":"3188","名稱":"鑫龍騰","貝氏評分":4.53,"分類":"long_term","現價":24.1,"漲幅":"-1.0"},{"代號":"3163","名稱":"波若威","貝氏評分":4.53,"分類":"long_term","現價":1040.0,"漲幅":"+3.0"},{"代號":"3152","名稱":"璟德","貝氏評分":4.53,"分類":"long_term","現價":175.5,"漲幅":"+0.9"},{"代號":"3093","名稱":"港建*","貝氏評分":4.53,"分類":"long_term","現價":59.5,"漲幅":"+0.5"},{"代號":"3086","名稱":"華義","貝氏評分":4.53,"分類":"long_term","現價":40.05,"漲幅":"+0.4"},{"代號":"3078","名稱":"僑威","貝氏評分":4.53,"分類":"long_term","現價":57.2,"漲幅":"-0.5"},{"代號":"1785","名稱":"光洋科","貝氏評分":4.53,"分類":"long_term","現價":159.0,"漲幅":"-4.8"},{"代號":"1591","名稱":"駿吉-KY","貝氏評分":4.53,"分類":"long_term","現價":63.6,"漲幅":"-1.4"},{"代號":"1584","名稱":"精剛","貝氏評分":4.53,"分類":"long_term","現價":20.4,"漲幅":"+1.5"},{"代號":"1569","名稱":"濱川","貝氏評分":4.53,"分類":"long_term","現價":55.8,"漲幅":"-0.5"},{"代號":"8473","名稱":"山林水","貝氏評分":4.5,"分類":"long_term","現價":34.2,"漲幅":"-1.2"},{"代號":"3543","名稱":"州巧","貝氏評分":4.5,"分類":"long_term","現價":38.6,"漲幅":"-3.1"},{"代號":"2836","名稱":"高雄銀","貝氏評分":4.5,"分類":"long_term","現價":11.85,"漲幅":"-0.4"},{"代號":"1789","名稱":"神隆","貝氏評分":4.5,"分類":"long_term","現價":19.25,"漲幅":"-2.8"},{"代號":"8938","名稱":"明安","貝氏評分":4.5,"分類":"long_term","現價":55.3,"漲幅":"-1.3"},{"代號":"4157","名稱":"太景*-KY","貝氏評分":4.5,"分類":"long_term","現價":9.26,"漲幅":"-2.0"},{"代號":"3508","名稱":"位速","貝氏評分":4.5,"分類":"long_term","現價":21.0,"漲幅":"-4.5"},{"代號":"2646","名稱":"星宇航空","貝氏評分":4.49,"分類":"long_term","現價":20.5,"漲幅":"-0.5"},{"代號":"4123","名稱":"晟德","貝氏評分":4.49,"分類":"long_term","現價":38.3,"漲幅":"+0.9"},{"代號":"4147","名稱":"中裕","貝氏評分":4.48,"分類":"long_term","現價":48.85,"漲幅":"-1.7"},{"代號":"3379","名稱":"彬台","貝氏評分":4.47,"分類":"long_term","現價":36.6,"漲幅":"-1.9"},{"代號":"4113","名稱":"聯上","貝氏評分":4.43,"分類":"long_term","現價":14.75,"漲幅":"-0.7"},{"代號":"4755","名稱":"三福化","貝氏評分":4.4,"分類":"long_term","現價":139.0,"漲幅":"+0.0"},{"代號":"2204","名稱":"中華","貝氏評分":4.39,"分類":"long_term","現價":54.1,"漲幅":"-0.6"},{"代號":"6164","名稱":"華興","貝氏評分":4.37,"分類":"long_term","現價":12.3,"漲幅":"-1.2"},{"代號":"8089","名稱":"康全電訊","貝氏評分":4.32,"分類":"long_term","現價":21.1,"漲幅":"-3.0"},{"代號":"4763","名稱":"材料*-KY","貝氏評分":4.27,"分類":"long_term","現價":41.95,"漲幅":"+0.1"},{"代號":"4142","名稱":"國光生","貝氏評分":4.27,"分類":"long_term","現價":17.65,"漲幅":"-0.8"},{"代號":"2731","名稱":"雄獅","貝氏評分":4.27,"分類":"long_term","現價":159.5,"漲幅":"+0.0"},{"代號":"2617","名稱":"台航","貝氏評分":4.27,"分類":"long_term","現價":29.25,"漲幅":"-0.5"},{"代號":"2528","名稱":"皇普","貝氏評分":4.27,"分類":"long_term","現價":22.3,"漲幅":"+0.2"},{"代號":"2461","名稱":"光群雷","貝氏評分":4.27,"分類":"long_term","現價":15.95,"漲幅":"-3.3"},{"代號":"2332","名稱":"友訊","貝氏評分":4.27,"分類":"long_term","現價":13.8,"漲幅":"-1.1"},{"代號":"1611","名稱":"中電","貝氏評分":4.27,"分類":"long_term","現價":11.8,"漲幅":"-0.8"},{"代號":"1444","名稱":"力麗","貝氏評分":4.27,"分類":"long_term","現價":5.96,"漲幅":"-0.7"},{"代號":"1440","名稱":"南紡","貝氏評分":4.27,"分類":"long_term","現價":12.15,"漲幅":"-0.8"},{"代號":"1219","名稱":"福壽","貝氏評分":4.27,"分類":"long_term","現價":13.3,"漲幅":"-0.7"},{"代號":"1217","名稱":"愛之味","貝氏評分":4.27,"分類":"long_term","現價":9.63,"漲幅":"-0.3"},{"代號":"6156","名稱":"松上","貝氏評分":4.27,"分類":"long_term","現價":19.65,"漲幅":"+1.0"},{"代號":"2444","名稱":"兆勁","貝氏評分":4.26,"分類":"long_term","現價":12.9,"漲幅":"-1.9"},{"代號":"3663","名稱":"鑫科","貝氏評分":4.26,"分類":"long_term","現價":67.9,"漲幅":"-5.8"},{"代號":"7402","名稱":"邑錡","貝氏評分":4.15,"分類":"long_term","現價":114.5,"漲幅":"-8.8"},{"代號":"9907","名稱":"統一實","貝氏評分":3.94,"分類":"long_term","現價":17.0,"漲幅":"-0.6"},{"代號":"8464","名稱":"億豐","貝氏評分":3.94,"分類":"long_term","現價":335.0,"漲幅":"-2.3"},{"代號":"6142","名稱":"友勁","貝氏評分":3.94,"分類":"long_term","現價":8.6,"漲幅":"-1.5"},{"代號":"5608","名稱":"四維航","貝氏評分":3.94,"分類":"long_term","現價":15.15,"漲幅":"+0.0"},{"代號":"2905","名稱":"三商","貝氏評分":3.94,"分類":"long_term","現價":13.35,"漲幅":"-2.2"},{"代號":"2812","名稱":"台中銀","貝氏評分":3.94,"分類":"long_term","現價":19.75,"漲幅":"+0.0"},{"代號":"2547","名稱":"日勝生","貝氏評分":3.94,"分類":"long_term","現價":10.25,"漲幅":"-0.5"},{"代號":"2511","名稱":"太子","貝氏評分":3.94,"分類":"long_term","現價":7.82,"漲幅":"+0.1"},{"代號":"2504","名稱":"國產","貝氏評分":3.94,"分類":"long_term","現價":34.8,"漲幅":"+0.1"},{"代號":"2390","名稱":"云辰","貝氏評分":3.94,"分類":"long_term","現價":9.38,"漲幅":"-0.8"},{"代號":"1471","名稱":"首利","貝氏評分":3.94,"分類":"long_term","現價":11.0,"漲幅":"-0.9"},{"代號":"6188","名稱":"廣明","貝氏評分":3.94,"分類":"long_term","現價":84.8,"漲幅":"+1.3"},{"代號":"5512","名稱":"力麒","貝氏評分":3.94,"分類":"long_term","現價":6.92,"漲幅":"-0.7"},{"代號":"4743","名稱":"合一","貝氏評分":3.94,"分類":"long_term","現價":51.5,"漲幅":"-0.2"},{"代號":"4128","名稱":"中天","貝氏評分":3.94,"分類":"long_term","現價":15.1,"漲幅":"+0.7"},{"代號":"2211","名稱":"長榮鋼","貝氏評分":3.91,"分類":"long_term","現價":97.7,"漲幅":"-0.8"},{"代號":"1702","名稱":"南僑","貝氏評分":3.8,"分類":"long_term","現價":34.15,"漲幅":"-0.6"},{"代號":"1718","名稱":"中纖","貝氏評分":3.71,"分類":"long_term","現價":6.48,"漲幅":"+2.2"},{"代號":"4414","名稱":"如興","貝氏評分":3.31,"分類":"long_term","現價":9.98,"漲幅":"-0.2"},{"代號":"2614","名稱":"東森","貝氏評分":3.15,"分類":"long_term","現價":20.0,"漲幅":"-0.5"},{"代號":"8271","名稱":"宇瞻","貝氏評分":4.53,"分類":"intraday_dip","現價":256.0,"漲幅":"-1.7"},{"代號":"8222","名稱":"寶一","貝氏評分":4.53,"分類":"intraday_dip","現價":35.5,"漲幅":"-6.5"},{"代號":"8150","名稱":"南茂","貝氏評分":4.53,"分類":"intraday_dip","現價":91.0,"漲幅":"-1.8"},{"代號":"8112","名稱":"至上","貝氏評分":4.53,"分類":"intraday_dip","現價":86.8,"漲幅":"-2.8"},{"代號":"8103","名稱":"瀚荃","貝氏評分":4.53,"分類":"intraday_dip","現價":115.5,"漲幅":"-0.4"},{"代號":"6944","名稱":"兆聯實業","貝氏評分":4.53,"分類":"intraday_dip","現價":923.0,"漲幅":"-4.3"},{"代號":"6862","名稱":"三集瑞-KY","貝氏評分":4.53,"分類":"intraday_dip","現價":168.5,"漲幅":"-9.9"},{"代號":"6770","名稱":"力積電","貝氏評分":4.53,"分類":"intraday_dip","現價":62.5,"漲幅":"+1.8"},{"代號":"6757","名稱":"台灣虎航","貝氏評分":4.53,"分類":"intraday_dip","現價":55.2,"漲幅":"-3.2"},{"代號":"6753","名稱":"龍德造船","貝氏評分":4.53,"分類":"intraday_dip","現價":131.5,"漲幅":"-9.3"},{"代號":"6698","名稱":"旭暉應材","貝氏評分":4.53,"分類":"intraday_dip","現價":31.2,"漲幅":"-5.2"},{"代號":"6550","名稱":"北極星藥業-KY","貝氏評分":4.53,"分類":"intraday_dip","現價":16.9,"漲幅":"-4.0"},{"代號":"6526","名稱":"達發","貝氏評分":4.53,"分類":"intraday_dip","現價":750.0,"漲幅":"-0.4"},{"代號":"6409","名稱":"旭隼","貝氏評分":4.53,"分類":"intraday_dip","現價":764.0,"漲幅":"-6.9"},{"代號":"6269","名稱":"台郡","貝氏評分":4.53,"分類":"intraday_dip","現價":58.0,"漲幅":"-8.2"},{"代號":"6224","名稱":"聚鼎","貝氏評分":4.53,"分類":"intraday_dip","現價":75.7,"漲幅":"-3.8"},{"代號":"6209","名稱":"今國光","貝氏評分":4.53,"分類":"intraday_dip","現價":65.8,"漲幅":"-0.3"},{"代號":"6155","名稱":"鈞寶","貝氏評分":4.53,"分類":"intraday_dip","現價":51.2,"漲幅":"-3.8"},{"代號":"6153","名稱":"嘉聯益","貝氏評分":4.53,"分類":"intraday_dip","現價":18.05,"漲幅":"-1.6"},{"代號":"6139","名稱":"亞翔","貝氏評分":4.53,"分類":"intraday_dip","現價":679.0,"漲幅":"-4.9"},{"代號":"5515","名稱":"建國","貝氏評分":4.53,"分類":"intraday_dip","現價":38.6,"漲幅":"-3.4"},{"代號":"5222","名稱":"全訊","貝氏評分":4.53,"分類":"intraday_dip","現價":131.5,"漲幅":"-5.4"},{"代號":"4722","名稱":"國精化","貝氏評分":4.53,"分類":"intraday_dip","現價":235.0,"漲幅":"-0.6"},{"代號":"3717","名稱":"聯嘉投控","貝氏評分":4.53,"分類":"intraday_dip","現價":23.3,"漲幅":"-3.1"},{"代號":"3694","名稱":"海華","貝氏評分":4.53,"分類":"intraday_dip","現價":56.8,"漲幅":"-5.3"},{"代號":"3592","名稱":"瑞鼎","貝氏評分":4.53,"分類":"intraday_dip","現價":263.5,"漲幅":"+1.9"},{"代號":"3528","名稱":"安馳","貝氏評分":4.53,"分類":"intraday_dip","現價":82.5,"漲幅":"-9.3"},{"代號":"3416","名稱":"融程電","貝氏評分":4.53,"分類":"intraday_dip","現價":171.5,"漲幅":"-2.3"},{"代號":"3231","名稱":"緯創","貝氏評分":4.53,"分類":"intraday_dip","現價":139.0,"漲幅":"-5.1"},{"代號":"3028","名稱":"增你強","貝氏評分":4.53,"分類":"intraday_dip","現價":75.5,"漲幅":"-5.4"},{"代號":"3004","名稱":"豐達科","貝氏評分":4.53,"分類":"intraday_dip","現價":114.5,"漲幅":"-2.1"},{"代號":"2645","名稱":"長榮航太","貝氏評分":4.53,"分類":"intraday_dip","現價":154.5,"漲幅":"-5.8"},{"代號":"2630","名稱":"亞航","貝氏評分":4.53,"分類":"intraday_dip","現價":45.6,"漲幅":"-9.5"},{"代號":"2527","名稱":"宏璟","貝氏評分":4.53,"分類":"intraday_dip","現價":34.35,"漲幅":"-0.9"},{"代號":"2497","名稱":"怡利電","貝氏評分":4.53,"分類":"intraday_dip","現價":58.6,"漲幅":"-3.5"},{"代號":"2486","名稱":"一詮","貝氏評分":4.53,"分類":"intraday_dip","現價":281.5,"漲幅":"+0.0"},{"代號":"2484","名稱":"希華","貝氏評分":4.53,"分類":"intraday_dip","現價":39.6,"漲幅":"-5.3"},{"代號":"2468","名稱":"華經","貝氏評分":4.53,"分類":"intraday_dip","現價":34.2,"漲幅":"-4.5"},{"代號":"2449","名稱":"京元電子","貝氏評分":4.53,"分類":"intraday_dip","現價":299.5,"漲幅":"-3.7"},{"代號":"2379","名稱":"瑞昱","貝氏評分":4.53,"分類":"intraday_dip","現價":584.0,"漲幅":"-1.4"},{"代號":"2329","名稱":"華泰","貝氏評分":4.53,"分類":"intraday_dip","現價":59.0,"漲幅":"-1.2"},{"代號":"2243","名稱":"宏旭-KY","貝氏評分":4.53,"分類":"intraday_dip","現價":21.65,"漲幅":"-9.0"},{"代號":"2231","名稱":"為升","貝氏評分":4.53,"分類":"intraday_dip","現價":109.0,"漲幅":"-6.0"},{"代號":"2208","名稱":"台船","貝氏評分":4.53,"分類":"intraday_dip","現價":20.2,"漲幅":"-6.9"},{"代號":"1762","名稱":"中化生","貝氏評分":4.53,"分類":"intraday_dip","現價":37.55,"漲幅":"-3.1"},{"代號":"1711","名稱":"永光","貝氏評分":4.53,"分類":"intraday_dip","現價":54.2,"漲幅":"-5.7"},{"代號":"8183","名稱":"精星","貝氏評分":4.53,"分類":"intraday_dip","現價":31.7,"漲幅":"-1.7"},{"代號":"8182","名稱":"加高","貝氏評分":4.53,"分類":"intraday_dip","現價":37.4,"漲幅":"-5.3"},{"代號":"8155","名稱":"博智","貝氏評分":4.53,"分類":"intraday_dip","現價":420.0,"漲幅":"-5.4"},{"代號":"8043","名稱":"蜜望實","貝氏評分":4.53,"分類":"intraday_dip","現價":84.7,"漲幅":"-5.7"},{"代號":"7709","名稱":"榮田","貝氏評分":4.53,"分類":"intraday_dip","現價":82.8,"漲幅":"-1.7"},{"代號":"6903","名稱":"巨漢","貝氏評分":4.53,"分類":"intraday_dip","現價":405.0,"漲幅":"-4.0"},{"代號":"6821","名稱":"聯寶","貝氏評分":4.53,"分類":"intraday_dip","現價":50.0,"漲幅":"-2.0"},{"代號":"6568","名稱":"宏觀","貝氏評分":4.53,"分類":"intraday_dip","現價":226.0,"漲幅":"-3.0"},{"代號":"6532","名稱":"瑞耘","貝氏評分":4.53,"分類":"intraday_dip","現價":107.5,"漲幅":"-5.7"},{"代號":"6469","名稱":"大樹","貝氏評分":4.53,"分類":"intraday_dip","現價":73.5,"漲幅":"-3.8"},{"代號":"6419","名稱":"京晨科","貝氏評分":4.53,"分類":"intraday_dip","現價":137.0,"漲幅":"-4.9"},{"代號":"6275","名稱":"元山","貝氏評分":4.53,"分類":"intraday_dip","現價":50.4,"漲幅":"-5.3"},{"代號":"6227","名稱":"茂綸","貝氏評分":4.53,"分類":"intraday_dip","現價":103.0,"漲幅":"+2.5"},{"代號":"6218","名稱":"豪勉","貝氏評分":4.53,"分類":"intraday_dip","現價":37.3,"漲幅":"-4.4"},{"代號":"6187","名稱":"萬潤","貝氏評分":4.53,"分類":"intraday_dip","現價":1110.0,"漲幅":"+3.7"},{"代號":"5498","名稱":"凱崴","貝氏評分":4.53,"分類":"intraday_dip","現價":69.1,"漲幅":"-4.0"},{"代號":"5381","名稱":"合正","貝氏評分":4.53,"分類":"intraday_dip","現價":23.8,"漲幅":"-2.1"},{"代號":"5302","名稱":"太欣","貝氏評分":4.53,"分類":"intraday_dip","現價":11.4,"漲幅":"-3.4"},{"代號":"5291","名稱":"邑昇","貝氏評分":4.53,"分類":"intraday_dip","現價":71.5,"漲幅":"+1.6"},{"代號":"5272","名稱":"笙科","貝氏評分":4.53,"分類":"intraday_dip","現價":23.45,"漲幅":"-3.1"},{"代號":"5228","名稱":"鈺鎧","貝氏評分":4.53,"分類":"intraday_dip","現價":41.7,"漲幅":"+4.4"},{"代號":"5210","名稱":"寶碩","貝氏評分":4.53,"分類":"intraday_dip","現價":27.8,"漲幅":"-0.9"},{"代號":"4939","名稱":"亞電","貝氏評分":4.53,"分類":"intraday_dip","現價":40.1,"漲幅":"-3.4"},{"代號":"4908","名稱":"前鼎","貝氏評分":4.53,"分類":"intraday_dip","現價":227.5,"漲幅":"-0.9"},{"代號":"4543","名稱":"萬在","貝氏評分":4.53,"分類":"intraday_dip","現價":38.0,"漲幅":"-5.9"},{"代號":"4541","名稱":"晟田","貝氏評分":4.53,"分類":"intraday_dip","現價":45.7,"漲幅":"-4.7"},{"代號":"4534","名稱":"慶騰","貝氏評分":4.53,"分類":"intraday_dip","現價":23.05,"漲幅":"-3.8"},{"代號":"3710","名稱":"連展投控","貝氏評分":4.53,"分類":"intraday_dip","現價":6.01,"漲幅":"-4.5"},{"代號":"3663","名稱":"鑫科","貝氏評分":4.53,"分類":"intraday_dip","現價":67.9,"漲幅":"-5.8"},{"代號":"3567","名稱":"逸昌","貝氏評分":4.53,"分類":"intraday_dip","現價":29.35,"漲幅":"-1.5"},{"代號":"3490","名稱":"單井","貝氏評分":4.53,"分類":"intraday_dip","現價":30.75,"漲幅":"-0.6"},{"代號":"3467","名稱":"台灣精材","貝氏評分":4.53,"分類":"intraday_dip","現價":71.4,"漲幅":"-0.8"},{"代號":"3466","名稱":"德晉","貝氏評分":4.53,"分類":"intraday_dip","現價":39.75,"漲幅":"-3.3"},{"代號":"3441","名稱":"聯一光","貝氏評分":4.53,"分類":"intraday_dip","現價":40.55,"漲幅":"-5.3"},{"代號":"3438","名稱":"類比科","貝氏評分":4.53,"分類":"intraday_dip","現價":63.9,"漲幅":"-1.4"},{"代號":"3339","名稱":"泰谷","貝氏評分":4.53,"分類":"intraday_dip","現價":54.0,"漲幅":"-8.2"},{"代號":"3221","名稱":"台嘉碩","貝氏評分":4.53,"分類":"intraday_dip","現價":43.8,"漲幅":"-3.1"},{"代號":"3122","名稱":"笙泉","貝氏評分":4.53,"分類":"intraday_dip","現價":38.5,"漲幅":"-4.2"},{"代號":"2230","名稱":"泰茂","貝氏評分":4.53,"分類":"intraday_dip","現價":31.35,"漲幅":"-7.4"},{"代號":"1785","名稱":"光洋科","貝氏評分":4.53,"分類":"intraday_dip","現價":159.0,"漲幅":"-4.8"},{"代號":"3543","名稱":"州巧","貝氏評分":4.5,"分類":"intraday_dip","現價":38.6,"漲幅":"-3.1"},{"代號":"3508","名稱":"位速","貝氏評分":4.5,"分類":"intraday_dip","現價":21.0,"漲幅":"-4.5"},{"代號":"8089","名稱":"康全電訊","貝氏評分":4.32,"分類":"intraday_dip","現價":21.1,"漲幅":"-3.0"},{"代號":"2461","名稱":"光群雷","貝氏評分":4.27,"分類":"intraday_dip","現價":15.95,"漲幅":"-3.3"},{"代號":"7402","名稱":"邑錡","貝氏評分":4.15,"分類":"intraday_dip","現價":114.5,"漲幅":"-8.8"},{"代號":"6142","名稱":"友勁","貝氏評分":3.94,"分類":"intraday_dip","現價":8.6,"漲幅":"-1.5"},{"代號":"1309","名稱":"台達化","貝氏評分":4.53,"分類":"reversal","現價":16.9,"漲幅":null},{"代號":"1308","名稱":"亞聚","貝氏評分":4.53,"分類":"reversal","現價":13.65,"漲幅":null},{"代號":"1305","名稱":"華夏","貝氏評分":4.53,"分類":"reversal","現價":13.35,"漲幅":null},{"代號":"4909","名稱":"新復興","貝氏評分":4.53,"分類":"reversal","現價":53.9,"漲幅":null},{"代號":"1310","名稱":"台苯","貝氏評分":4.51,"分類":"reversal","現價":8.64,"漲幅":null},{"代號":"8431","名稱":"匯鑽科","貝氏評分":4.51,"分類":"reversal","現價":60.9,"漲幅":null},{"代號":"3563","名稱":"牧德","貝氏評分":4.47,"分類":"reversal","現價":807.0,"漲幅":null},{"代號":"2439","名稱":"美律","貝氏評分":4.34,"分類":"reversal","現價":86.4,"漲幅":null},{"代號":"6156","名稱":"松上","貝氏評分":4.26,"分類":"reversal","現價":19.65,"漲幅":null},{"代號":"2419","名稱":"仲琦","貝氏評分":4.21,"分類":"reversal","現價":30.0,"漲幅":null},{"代號":"1582","名稱":"信錦","貝氏評分":4.21,"分類":"reversal","現價":89.5,"漲幅":null},{"代號":"1528","名稱":"恩德","貝氏評分":4.21,"分類":"reversal","現價":26.15,"漲幅":null},{"代號":"8924","名稱":"大田","貝氏評分":4.18,"分類":"reversal","現價":64.0,"漲幅":null},{"代號":"3380","名稱":"明泰","貝氏評分":4.16,"分類":"reversal","現價":32.2,"漲幅":null},{"代號":"7717","名稱":"萊德光電-KY","貝氏評分":4.16,"分類":"reversal","現價":676.0,"漲幅":null},{"代號":"6191","名稱":"精成科","貝氏評分":3.98,"分類":"reversal","現價":94.8,"漲幅":null},{"代號":"2495","名稱":"普安","貝氏評分":3.98,"分類":"reversal","現價":36.35,"漲幅":null},{"代號":"2387","名稱":"精元","貝氏評分":3.98,"分類":"reversal","現價":40.0,"漲幅":null},{"代號":"3234","名稱":"光環","貝氏評分":3.98,"分類":"reversal","現價":97.5,"漲幅":null},{"代號":"1569","名稱":"濱川","貝氏評分":3.98,"分類":"reversal","現價":55.8,"漲幅":null},{"代號":"6735","名稱":"美達科技","貝氏評分":3.91,"分類":"reversal","現價":125.0,"漲幅":null},{"代號":"2466","名稱":"冠西電","貝氏評分":3.82,"分類":"reversal","現價":51.6,"漲幅":null},{"代號":"6782","名稱":"視陽","貝氏評分":3.74,"分類":"reversal","現價":194.5,"漲幅":null},{"代號":"3042","名稱":"晶技","貝氏評分":3.74,"分類":"reversal","現價":155.5,"漲幅":null},{"代號":"4174","名稱":"浩鼎","貝氏評分":3.33,"分類":"reversal","現價":33.35,"漲幅":null},{"代號":"1304","名稱":"台聚","貝氏評分":3.29,"分類":"reversal","現價":13.05,"漲幅":null},{"代號":"4903","名稱":"聯光通","貝氏評分":3.29,"分類":"reversal","現價":43.3,"漲幅":null},{"代號":"6438","名稱":"迅得","貝氏評分":3.17,"分類":"reversal","現價":171.0,"漲幅":null},{"代號":"6226","名稱":"光鼎","貝氏評分":3.17,"分類":"reversal","現價":12.2,"漲幅":null},{"代號":"3715","名稱":"定穎投控","貝氏評分":3.17,"分類":"reversal","現價":181.5,"漲幅":null},{"代號":"3535","名稱":"晶彩科","貝氏評分":3.17,"分類":"reversal","現價":126.0,"漲幅":null},{"代號":"3004","名稱":"豐達科","貝氏評分":3.17,"分類":"reversal","現價":114.5,"漲幅":null},{"代號":"2243","名稱":"宏旭-KY","貝氏評分":3.17,"分類":"reversal","現價":21.65,"漲幅":null},{"代號":"1314","名稱":"中石化","貝氏評分":3.17,"分類":"reversal","現價":7.09,"漲幅":null},{"代號":"8085","名稱":"福華","貝氏評分":3.17,"分類":"reversal","現價":12.15,"漲幅":null},{"代號":"6821","名稱":"聯寶","貝氏評分":3.17,"分類":"reversal","現價":50.0,"漲幅":null},{"代號":"6167","名稱":"久正","貝氏評分":3.17,"分類":"reversal","現價":12.0,"漲幅":null},{"代號":"3689","名稱":"湧德","貝氏評分":3.17,"分類":"reversal","現價":124.5,"漲幅":null},{"代號":"6909","名稱":"創控","貝氏評分":3.06,"分類":"reversal","現價":56.3,"漲幅":null},{"代號":"3701","名稱":"大眾控","貝氏評分":3.06,"分類":"reversal","現價":62.9,"漲幅":null},{"代號":"3092","名稱":"鴻碩","貝氏評分":3.06,"分類":"reversal","現價":30.25,"漲幅":null},{"代號":"1711","名稱":"永光","貝氏評分":3.06,"分類":"reversal","現價":54.2,"漲幅":null},{"代號":"8111","名稱":"立碁","貝氏評分":3.06,"分類":"reversal","現價":66.2,"漲幅":null},{"代號":"3605","名稱":"宏致","貝氏評分":2.78,"分類":"reversal","現價":82.3,"漲幅":null},{"代號":"2426","名稱":"鼎元","貝氏評分":2.78,"分類":"reversal","現價":66.7,"漲幅":null},{"代號":"2417","名稱":"圓剛","貝氏評分":2.78,"分類":"reversal","現價":51.0,"漲幅":null},{"代號":"8074","名稱":"鉅橡","貝氏評分":2.78,"分類":"reversal","現價":83.0,"漲幅":null},{"代號":"1215","名稱":"卜蜂","貝氏評分":2.78,"分類":"reversal","現價":133.0,"漲幅":null},{"代號":"6290","名稱":"良維","貝氏評分":2.78,"分類":"reversal","現價":275.5,"漲幅":null},{"代號":"5475","名稱":"德宏","貝氏評分":2.78,"分類":"reversal","現價":331.5,"漲幅":null},{"代號":"9933","名稱":"中鼎","貝氏評分":4.53,"分類":"pullback","現價":36.45,"漲幅":"-1.0"},{"代號":"8271","名稱":"宇瞻","貝氏評分":4.53,"分類":"pullback","現價":256.0,"漲幅":"-1.7"},{"代號":"8150","名稱":"南茂","貝氏評分":4.53,"分類":"pullback","現價":91.0,"漲幅":"-1.8"},{"代號":"8112","名稱":"至上","貝氏評分":4.53,"分類":"pullback","現價":86.8,"漲幅":"-2.8"},{"代號":"8105","名稱":"凌巨","貝氏評分":4.53,"分類":"pullback","現價":13.45,"漲幅":"-0.7"},{"代號":"8103","名稱":"瀚荃","貝氏評分":4.53,"分類":"pullback","現價":115.5,"漲幅":"-0.4"},{"代號":"8033","名稱":"雷虎","貝氏評分":4.53,"分類":"pullback","現價":144.0,"漲幅":"-9.4"},{"代號":"8016","名稱":"矽創","貝氏評分":4.53,"分類":"pullback","現價":268.5,"漲幅":"-1.6"},{"代號":"6962","名稱":"奕力-KY","貝氏評分":4.53,"分類":"pullback","現價":38.1,"漲幅":"-0.5"},{"代號":"6944","名稱":"兆聯實業","貝氏評分":4.53,"分類":"pullback","現價":923.0,"漲幅":"-4.3"},{"代號":"6937","名稱":"天虹","貝氏評分":4.53,"分類":"pullback","現價":295.5,"漲幅":"-3.6"},{"代號":"6909","名稱":"創控","貝氏評分":4.53,"分類":"pullback","現價":56.3,"漲幅":"-1.1"},{"代號":"6834","名稱":"天二科技","貝氏評分":4.53,"分類":"pullback","現價":47.85,"漲幅":"-0.5"},{"代號":"6830","名稱":"汎銓","貝氏評分":4.53,"分類":"pullback","現價":754.0,"漲幅":"-4.2"},{"代號":"6789","名稱":"采鈺","貝氏評分":4.53,"分類":"pullback","現價":600.0,"漲幅":"-0.5"},{"代號":"6782","名稱":"視陽","貝氏評分":4.53,"分類":"pullback","現價":194.5,"漲幅":"-0.8"},{"代號":"6753","名稱":"龍德造船","貝氏評分":4.53,"分類":"pullback","現價":131.5,"漲幅":"-9.3"},{"代號":"6706","名稱":"惠特","貝氏評分":4.53,"分類":"pullback","現價":168.5,"漲幅":"-2.3"},{"代號":"6691","名稱":"洋基工程","貝氏評分":4.53,"分類":"pullback","現價":643.0,"漲幅":"-1.7"},{"代號":"6526","名稱":"達發","貝氏評分":4.53,"分類":"pullback","現價":750.0,"漲幅":"-0.4"},{"代號":"6449","名稱":"鈺邦","貝氏評分":4.53,"分類":"pullback","現價":180.5,"漲幅":"-1.4"},{"代號":"6446","名稱":"藥華藥","貝氏評分":4.53,"分類":"pullback","現價":706.0,"漲幅":"-2.5"},{"代號":"6442","名稱":"光聖","貝氏評分":4.53,"分類":"pullback","現價":1950.0,"漲幅":"-0.8"},{"代號":"6426","名稱":"統新","貝氏評分":4.53,"分類":"pullback","現價":260.0,"漲幅":"-0.8"},{"代號":"6405","名稱":"悅城","貝氏評分":4.53,"分類":"pullback","現價":58.0,"漲幅":"-9.9"},{"代號":"6283","名稱":"淳安","貝氏評分":4.53,"分類":"pullback","現價":25.1,"漲幅":"-2.1"},{"代號":"6269","名稱":"台郡","貝氏評分":4.53,"分類":"pullback","現價":58.0,"漲幅":"-8.2"},{"代號":"6226","名稱":"光鼎","貝氏評分":4.53,"分類":"pullback","現價":12.2,"漲幅":"-0.8"},{"代號":"6224","名稱":"聚鼎","貝氏評分":4.53,"分類":"pullback","現價":75.7,"漲幅":"-3.8"},{"代號":"6209","名稱":"今國光","貝氏評分":4.53,"分類":"pullback","現價":65.8,"漲幅":"-0.3"},{"代號":"6189","名稱":"豐藝","貝氏評分":4.53,"分類":"pullback","現價":48.2,"漲幅":"-1.6"},{"代號":"6165","名稱":"浪凡","貝氏評分":4.53,"分類":"pullback","現價":51.8,"漲幅":"-0.4"},{"代號":"6155","名稱":"鈞寶","貝氏評分":4.53,"分類":"pullback","現價":51.2,"漲幅":"-3.8"},{"代號":"6153","名稱":"嘉聯益","貝氏評分":4.53,"分類":"pullback","現價":18.05,"漲幅":"-1.6"},{"代號":"6139","名稱":"亞翔","貝氏評分":4.53,"分類":"pullback","現價":679.0,"漲幅":"-4.9"},{"代號":"6136","名稱":"富爾特","貝氏評分":4.53,"分類":"pullback","現價":25.55,"漲幅":"-1.5"},{"代號":"6120","名稱":"達運","貝氏評分":4.53,"分類":"pullback","現價":12.8,"漲幅":"-0.8"},{"代號":"6117","名稱":"迎廣","貝氏評分":4.53,"分類":"pullback","現價":80.3,"漲幅":"-0.5"},{"代號":"6108","名稱":"競國","貝氏評分":4.53,"分類":"pullback","現價":20.0,"漲幅":"-8.3"},{"代號":"5871","名稱":"中租-KY","貝氏評分":4.53,"分類":"pullback","現價":112.0,"漲幅":"-0.4"},{"代號":"5515","名稱":"建國","貝氏評分":4.53,"分類":"pullback","現價":38.6,"漲幅":"-3.4"},{"代號":"5269","名稱":"祥碩","貝氏評分":4.53,"分類":"pullback","現價":1390.0,"漲幅":"-1.4"},{"代號":"5244","名稱":"弘凱","貝氏評分":4.53,"分類":"pullback","現價":40.7,"漲幅":"-3.1"},{"代號":"5222","名稱":"全訊","貝氏評分":4.53,"分類":"pullback","現價":131.5,"漲幅":"-5.4"},{"代號":"4989","名稱":"榮科","貝氏評分":4.53,"分類":"pullback","現價":94.6,"漲幅":"-0.1"},{"代號":"4967","名稱":"十銓","貝氏評分":4.53,"分類":"pullback","現價":284.5,"漲幅":"-4.5"},{"代號":"4956","名稱":"光鋐","貝氏評分":4.53,"分類":"pullback","現價":45.35,"漲幅":"-7.4"},{"代號":"4938","名稱":"和碩","貝氏評分":4.53,"分類":"pullback","現價":83.4,"漲幅":"-1.2"},{"代號":"4934","名稱":"太極","貝氏評分":4.53,"分類":"pullback","現價":18.3,"漲幅":"-1.1"},{"代號":"4766","名稱":"南寶","貝氏評分":4.53,"分類":"pullback","現價":379.0,"漲幅":"-3.3"},{"代號":"4764","名稱":"雙鍵","貝氏評分":4.53,"分類":"pullback","現價":321.0,"漲幅":"-5.6"},{"代號":"4722","名稱":"國精化","貝氏評分":4.53,"分類":"pullback","現價":235.0,"漲幅":"-0.6"},{"代號":"4720","名稱":"德淵","貝氏評分":4.53,"分類":"pullback","現價":25.75,"漲幅":"-1.2"},{"代號":"4562","名稱":"穎漢","貝氏評分":4.53,"分類":"pullback","現價":37.2,"漲幅":"-1.3"},{"代號":"3717","名稱":"聯嘉投控","貝氏評分":4.53,"分類":"pullback","現價":23.3,"漲幅":"-3.1"},{"代號":"3714","名稱":"富采","貝氏評分":4.53,"分類":"pullback","現價":67.9,"漲幅":"-4.5"},{"代號":"3704","名稱":"合勤控","貝氏評分":4.53,"分類":"pullback","現價":35.05,"漲幅":"-0.7"},{"代號":"3694","名稱":"海華","貝氏評分":4.53,"分類":"pullback","現價":56.8,"漲幅":"-5.3"},{"代號":"3605","名稱":"宏致","貝氏評分":4.53,"分類":"pullback","現價":82.3,"漲幅":"-1.2"},{"代號":"3591","名稱":"艾笛森","貝氏評分":4.53,"分類":"pullback","現價":23.3,"漲幅":"-1.3"},{"代號":"3535","名稱":"晶彩科","貝氏評分":4.53,"分類":"pullback","現價":126.0,"漲幅":"-1.9"},{"代號":"3528","名稱":"安馳","貝氏評分":4.53,"分類":"pullback","現價":82.5,"漲幅":"-9.3"},{"代號":"3515","名稱":"華擎","貝氏評分":4.53,"分類":"pullback","現價":232.5,"漲幅":"-5.3"},{"代號":"3437","名稱":"榮創","貝氏評分":4.53,"分類":"pullback","現價":25.7,"漲幅":"-0.6"},{"代號":"3416","名稱":"融程電","貝氏評分":4.53,"分類":"pullback","現價":171.5,"漲幅":"-2.3"},{"代號":"3413","名稱":"京鼎","貝氏評分":4.53,"分類":"pullback","現價":308.5,"漲幅":"-2.2"},{"代號":"3338","名稱":"泰碩","貝氏評分":4.53,"分類":"pullback","現價":72.4,"漲幅":"-0.7"},{"代號":"3231","名稱":"緯創","貝氏評分":4.53,"分類":"pullback","現價":139.0,"漲幅":"-5.1"},{"代號":"3092","名稱":"鴻碩","貝氏評分":4.53,"分類":"pullback","現價":30.25,"漲幅":"-2.3"},{"代號":"3054","名稱":"立萬利","貝氏評分":4.53,"分類":"pullback","現價":69.6,"漲幅":"-1.1"},{"代號":"3034","名稱":"聯詠","貝氏評分":4.53,"分類":"pullback","現價":496.5,"漲幅":"-0.3"},{"代號":"3028","名稱":"增你強","貝氏評分":4.53,"分類":"pullback","現價":75.5,"漲幅":"-5.4"},{"代號":"3026","名稱":"禾伸堂","貝氏評分":4.53,"分類":"pullback","現價":329.5,"漲幅":"-0.2"},{"代號":"3025","名稱":"星通","貝氏評分":4.53,"分類":"pullback","現價":62.8,"漲幅":"-0.8"},{"代號":"3023","名稱":"信邦","貝氏評分":4.53,"分類":"pullback","現價":302.0,"漲幅":"-0.2"},{"代號":"3022","名稱":"威強電","貝氏評分":4.53,"分類":"pullback","現價":69.0,"漲幅":"-6.4"},{"代號":"3008","名稱":"大立光","貝氏評分":4.53,"分類":"pullback","現價":2545.0,"漲幅":"-1.0"},{"代號":"3004","名稱":"豐達科","貝氏評分":4.53,"分類":"pullback","現價":114.5,"漲幅":"-2.1"},{"代號":"2912","名稱":"統一超","貝氏評分":4.53,"分類":"pullback","現價":227.5,"漲幅":"-1.9"},{"代號":"2891","名稱":"中信金","貝氏評分":4.53,"分類":"pullback","現價":55.3,"漲幅":"-2.0"},{"代號":"2890","名稱":"永豐金","貝氏評分":4.53,"分類":"pullback","現價":30.6,"漲幅":"-1.3"},{"代號":"2887","名稱":"台新新光金","貝氏評分":4.53,"分類":"pullback","現價":23.45,"漲幅":"-1.5"},{"代號":"2886","名稱":"兆豐金","貝氏評分":4.53,"分類":"pullback","現價":40.1,"漲幅":"-0.2"},{"代號":"2883","名稱":"凱基金","貝氏評分":4.53,"分類":"pullback","現價":22.8,"漲幅":"-0.4"},{"代號":"2882","名稱":"國泰金","貝氏評分":4.53,"分類":"pullback","現價":78.4,"漲幅":"-2.0"},{"代號":"2881","名稱":"富邦金","貝氏評分":4.53,"分類":"pullback","現價":95.5,"漲幅":"-1.2"},{"代號":"2867","名稱":"三商壽","貝氏評分":4.53,"分類":"pullback","現價":7.82,"漲幅":"-0.1"},{"代號":"2834","名稱":"臺企銀","貝氏評分":4.53,"分類":"pullback","現價":16.15,"漲幅":"-0.6"},{"代號":"2801","名稱":"彰銀","貝氏評分":4.53,"分類":"pullback","現價":20.9,"漲幅":"-0.2"},{"代號":"2645","名稱":"長榮航太","貝氏評分":4.53,"分類":"pullback","現價":154.5,"漲幅":"-5.8"},{"代號":"2637","名稱":"慧洋-KY","貝氏評分":4.53,"分類":"pullback","現價":74.5,"漲幅":"-0.1"},{"代號":"2527","名稱":"宏璟","貝氏評分":4.53,"分類":"pullback","現價":34.35,"漲幅":"-0.9"},{"代號":"2501","名稱":"國建","貝氏評分":4.53,"分類":"pullback","現價":22.65,"漲幅":"-1.5"},{"代號":"2497","名稱":"怡利電","貝氏評分":4.53,"分類":"pullback","現價":58.6,"漲幅":"-3.5"},{"代號":"2495","名稱":"普安","貝氏評分":4.53,"分類":"pullback","現價":36.35,"漲幅":"-1.2"},{"代號":"2493","名稱":"揚博","貝氏評分":4.53,"分類":"pullback","現價":129.5,"漲幅":"-1.5"},{"代號":"2491","名稱":"吉祥全","貝氏評分":4.53,"分類":"pullback","現價":21.0,"漲幅":"-0.5"},{"代號":"2485","名稱":"兆赫","貝氏評分":4.53,"分類":"pullback","現價":67.6,"漲幅":"-1.5"},{"代號":"2484","名稱":"希華","貝氏評分":4.53,"分類":"pullback","現價":39.6,"漲幅":"-5.3"},{"代號":"2478","名稱":"大毅","貝氏評分":4.53,"分類":"pullback","現價":77.9,"漲幅":"-0.3"},{"代號":"2464","名稱":"盟立","貝氏評分":4.53,"分類":"pullback","現價":120.0,"漲幅":"-1.6"},{"代號":"2461","名稱":"光群雷","貝氏評分":4.53,"分類":"pullback","現價":15.95,"漲幅":"-3.3"},{"代號":"2458","名稱":"義隆","貝氏評分":4.53,"分類":"pullback","現價":150.0,"漲幅":"-1.0"},{"代號":"2449","名稱":"京元電子","貝氏評分":4.53,"分類":"pullback","現價":299.5,"漲幅":"-3.7"},{"代號":"2426","名稱":"鼎元","貝氏評分":4.53,"分類":"pullback","現價":66.7,"漲幅":"-1.2"},{"代號":"2419","名稱":"仲琦","貝氏評分":4.53,"分類":"pullback","現價":30.0,"漲幅":"-0.2"},{"代號":"2414","名稱":"精技","貝氏評分":4.53,"分類":"pullback","現價":47.9,"漲幅":"-2.0"},{"代號":"2412","名稱":"中華電","貝氏評分":4.53,"分類":"pullback","現價":135.5,"漲幅":"-0.7"},{"代號":"2387","名稱":"精元","貝氏評分":4.53,"分類":"pullback","現價":40.0,"漲幅":"-1.8"},{"代號":"2379","名稱":"瑞昱","貝氏評分":4.53,"分類":"pullback","現價":584.0,"漲幅":"-1.4"},{"代號":"2342","名稱":"茂矽","貝氏評分":4.53,"分類":"pullback","現價":43.05,"漲幅":"-1.7"},{"代號":"2338","名稱":"光罩","貝氏評分":4.53,"分類":"pullback","現價":50.0,"漲幅":"-2.9"},{"代號":"2330","名稱":"台積電","貝氏評分":4.53,"分類":"pullback","現價":2235.0,"漲幅":"-2.4"},{"代號":"2329","名稱":"華泰","貝氏評分":4.53,"分類":"pullback","現價":59.0,"漲幅":"-1.2"},{"代號":"2313","名稱":"華通","貝氏評分":4.53,"分類":"pullback","現價":242.0,"漲幅":"-4.5"},{"代號":"2305","名稱":"全友","貝氏評分":4.53,"分類":"pullback","現價":17.55,"漲幅":"-1.4"},{"代號":"2243","名稱":"宏旭-KY","貝氏評分":4.53,"分類":"pullback","現價":21.65,"漲幅":"-9.0"},{"代號":"2231","名稱":"為升","貝氏評分":4.53,"分類":"pullback","現價":109.0,"漲幅":"-6.0"},{"代號":"2105","名稱":"正新","貝氏評分":4.53,"分類":"pullback","現價":32.05,"漲幅":"-0.2"},{"代號":"2034","名稱":"允強","貝氏評分":4.53,"分類":"pullback","現價":21.05,"漲幅":"-0.7"},{"代號":"1905","名稱":"華紙","貝氏評分":4.53,"分類":"pullback","現價":12.4,"漲幅":"-0.4"},{"代號":"1762","名稱":"中化生","貝氏評分":4.53,"分類":"pullback","現價":37.55,"漲幅":"-3.1"},{"代號":"1711","名稱":"永光","貝氏評分":4.53,"分類":"pullback","現價":54.2,"漲幅":"-5.7"},{"代號":"1709","名稱":"和益","貝氏評分":4.53,"分類":"pullback","現價":18.5,"漲幅":"-0.8"},{"代號":"1598","名稱":"岱宇","貝氏評分":4.53,"分類":"pullback","現價":21.8,"漲幅":"-1.8"},{"代號":"1528","名稱":"恩德","貝氏評分":4.53,"分類":"pullback","現價":26.15,"漲幅":"-1.5"},{"代號":"1460","名稱":"宏遠","貝氏評分":4.53,"分類":"pullback","現價":7.19,"漲幅":"-0.8"},{"代號":"8383","名稱":"千附","貝氏評分":4.53,"分類":"pullback","現價":56.0,"漲幅":"-6.8"},{"代號":"8182","名稱":"加高","貝氏評分":4.53,"分類":"pullback","現價":37.4,"漲幅":"-5.3"},{"代號":"8155","名稱":"博智","貝氏評分":4.53,"分類":"pullback","現價":420.0,"漲幅":"-5.4"},{"代號":"8111","名稱":"立碁","貝氏評分":4.53,"分類":"pullback","現價":66.2,"漲幅":"-0.9"},{"代號":"8043","名稱":"蜜望實","貝氏評分":4.53,"分類":"pullback","現價":84.7,"漲幅":"-5.7"},{"代號":"7709","名稱":"榮田","貝氏評分":4.53,"分類":"pullback","現價":82.8,"漲幅":"-1.7"},{"代號":"7547","名稱":"碩網","貝氏評分":4.53,"分類":"pullback","現價":71.2,"漲幅":"-2.3"},{"代號":"6903","名稱":"巨漢","貝氏評分":4.53,"分類":"pullback","現價":405.0,"漲幅":"-4.0"},{"代號":"6877","名稱":"鏵友益","貝氏評分":4.53,"分類":"pullback","現價":163.0,"漲幅":"-1.8"},{"代號":"6829","名稱":"千附精密","貝氏評分":4.53,"分類":"pullback","現價":225.5,"漲幅":"-10.0"},{"代號":"6821","名稱":"聯寶","貝氏評分":4.53,"分類":"pullback","現價":50.0,"漲幅":"-2.0"},{"代號":"6735","名稱":"美達科技","貝氏評分":4.53,"分類":"pullback","現價":125.0,"漲幅":"-1.2"},{"代號":"6727","名稱":"亞泰金屬","貝氏評分":4.53,"分類":"pullback","現價":495.0,"漲幅":"-1.8"},{"代號":"6679","名稱":"鈺太","貝氏評分":4.53,"分類":"pullback","現價":327.0,"漲幅":"-1.2"},{"代號":"6664","名稱":"群翊","貝氏評分":4.53,"分類":"pullback","現價":439.5,"漲幅":"-0.8"},{"代號":"6642","名稱":"富致","貝氏評分":4.53,"分類":"pullback","現價":64.3,"漲幅":"-0.2"},{"代號":"6613","名稱":"朋億*","貝氏評分":4.53,"分類":"pullback","現價":240.5,"漲幅":"-2.0"},{"代號":"6603","名稱":"富強鑫","貝氏評分":4.53,"分類":"pullback","現價":23.9,"漲幅":"-1.2"},{"代號":"6568","名稱":"宏觀","貝氏評分":4.53,"分類":"pullback","現價":226.0,"漲幅":"-3.0"},{"代號":"6532","名稱":"瑞耘","貝氏評分":4.53,"分類":"pullback","現價":107.5,"漲幅":"-5.7"},{"代號":"6509","名稱":"聚和","貝氏評分":4.53,"分類":"pullback","現價":43.7,"漲幅":"-2.1"},{"代號":"1210","名稱":"大成","貝氏評分":4.53,"分類":"pullback","現價":52.3,"漲幅":"-1.1"},{"代號":"6441","名稱":"廣錠","貝氏評分":4.53,"分類":"pullback","現價":27.55,"漲幅":"-0.9"},{"代號":"6419","名稱":"京晨科","貝氏評分":4.53,"分類":"pullback","現價":137.0,"漲幅":"-4.9"},{"代號":"6290","名稱":"良維","貝氏評分":4.53,"分類":"pullback","現價":275.5,"漲幅":"-0.4"},{"代號":"6275","名稱":"元山","貝氏評分":4.53,"分類":"pullback","現價":50.4,"漲幅":"-5.3"},{"代號":"6270","名稱":"倍微","貝氏評分":4.53,"分類":"pullback","現價":27.3,"漲幅":"-1.3"},{"代號":"6234","名稱":"高僑","貝氏評分":4.53,"分類":"pullback","現價":54.0,"漲幅":"-6.6"},{"代號":"6233","名稱":"旺玖","貝氏評分":4.53,"分類":"pullback","現價":26.5,"漲幅":"-1.1"},{"代號":"6231","名稱":"系微","貝氏評分":4.53,"分類":"pullback","現價":316.0,"漲幅":"-1.9"},{"代號":"6223","名稱":"旺矽","貝氏評分":4.53,"分類":"pullback","現價":4985.0,"漲幅":"-0.8"},{"代號":"6218","名稱":"豪勉","貝氏評分":4.53,"分類":"pullback","現價":37.3,"漲幅":"-4.4"},{"代號":"6150","名稱":"撼訊","貝氏評分":4.53,"分類":"pullback","現價":66.8,"漲幅":"-5.8"},{"代號":"6147","名稱":"頎邦","貝氏評分":4.53,"分類":"pullback","現價":196.5,"漲幅":"-0.8"},{"代號":"6146","名稱":"耕興","貝氏評分":4.53,"分類":"pullback","現價":213.5,"漲幅":"-1.8"},{"代號":"6127","名稱":"九豪","貝氏評分":4.53,"分類":"pullback","現價":47.5,"漲幅":"-1.1"},{"代號":"6113","名稱":"亞矽","貝氏評分":4.53,"分類":"pullback","現價":24.5,"漲幅":"-0.2"},{"代號":"6026","名稱":"福邦證","貝氏評分":4.53,"分類":"pullback","現價":16.6,"漲幅":"-1.2"},{"代號":"5498","名稱":"凱崴","貝氏評分":4.53,"分類":"pullback","現價":69.1,"漲幅":"-4.0"},{"代號":"5474","名稱":"聰泰","貝氏評分":4.53,"分類":"pullback","現價":164.5,"漲幅":"-0.6"},{"代號":"5386","名稱":"青雲","貝氏評分":4.53,"分類":"pullback","現價":439.5,"漲幅":"-6.5"},{"代號":"5302","名稱":"太欣","貝氏評分":4.53,"分類":"pullback","現價":11.4,"漲幅":"-3.4"},{"代號":"5272","名稱":"笙科","貝氏評分":4.53,"分類":"pullback","現價":23.45,"漲幅":"-3.1"},{"代號":"5236","名稱":"凌陽創新","貝氏評分":4.53,"分類":"pullback","現價":168.0,"漲幅":"-0.3"},{"代號":"5213","名稱":"亞昕","貝氏評分":4.53,"分類":"pullback","現價":25.85,"漲幅":"-0.4"},{"代號":"5210","名稱":"寶碩","貝氏評分":4.53,"分類":"pullback","現價":27.8,"漲幅":"-0.9"},{"代號":"4953","名稱":"緯軟","貝氏評分":4.53,"分類":"pullback","現價":118.5,"漲幅":"-2.1"},{"代號":"4951","名稱":"精拓科","貝氏評分":4.53,"分類":"pullback","現價":121.5,"漲幅":"-2.0"},{"代號":"4939","名稱":"亞電","貝氏評分":4.53,"分類":"pullback","現價":40.1,"漲幅":"-3.4"},{"代號":"4908","名稱":"前鼎","貝氏評分":4.53,"分類":"pullback","現價":227.5,"漲幅":"-0.9"},{"代號":"4768","名稱":"晶呈科技","貝氏評分":4.53,"分類":"pullback","現價":488.5,"漲幅":"-3.6"},{"代號":"4760","名稱":"勤凱","貝氏評分":4.53,"分類":"pullback","現價":279.5,"漲幅":"-2.8"},{"代號":"4721","名稱":"美琪瑪","貝氏評分":4.53,"分類":"pullback","現價":95.1,"漲幅":"-0.4"},{"代號":"4577","名稱":"達航科技","貝氏評分":4.53,"分類":"pullback","現價":139.5,"漲幅":"-1.8"},{"代號":"4543","名稱":"萬在","貝氏評分":4.53,"分類":"pullback","現價":38.0,"漲幅":"-5.9"},{"代號":"4542","名稱":"科嶠","貝氏評分":4.53,"分類":"pullback","現價":194.5,"漲幅":"-0.8"},{"代號":"4541","名稱":"晟田","貝氏評分":4.53,"分類":"pullback","現價":45.7,"漲幅":"-4.7"},{"代號":"4534","名稱":"慶騰","貝氏評分":4.53,"分類":"pullback","現價":23.05,"漲幅":"-3.8"},{"代號":"3710","名稱":"連展投控","貝氏評分":4.53,"分類":"pullback","現價":6.01,"漲幅":"-4.5"},{"代號":"3709","名稱":"鑫聯大投控","貝氏評分":4.53,"分類":"pullback","現價":89.1,"漲幅":"-4.1"},{"代號":"3693","名稱":"營邦","貝氏評分":4.53,"分類":"pullback","現價":582.0,"漲幅":"-3.5"},{"代號":"3689","名稱":"湧德","貝氏評分":4.53,"分類":"pullback","現價":124.5,"漲幅":"-1.2"},{"代號":"3663","名稱":"鑫科","貝氏評分":4.53,"分類":"pullback","現價":67.9,"漲幅":"-5.8"},{"代號":"3615","名稱":"安可","貝氏評分":4.53,"分類":"pullback","現價":33.5,"漲幅":"-1.8"},{"代號":"3567","名稱":"逸昌","貝氏評分":4.53,"分類":"pullback","現價":29.35,"漲幅":"-1.5"},{"代號":"3526","名稱":"凡甲","貝氏評分":4.53,"分類":"pullback","現價":388.0,"漲幅":"-1.8"},{"代號":"3511","名稱":"矽瑪","貝氏評分":4.53,"分類":"pullback","現價":21.5,"漲幅":"-2.3"},{"代號":"3490","名稱":"單井","貝氏評分":4.53,"分類":"pullback","現價":30.75,"漲幅":"-0.6"},{"代號":"3483","名稱":"力致","貝氏評分":4.53,"分類":"pullback","現價":90.9,"漲幅":"-0.4"},{"代號":"3467","名稱":"台灣精材","貝氏評分":4.53,"分類":"pullback","現價":71.4,"漲幅":"-0.8"},{"代號":"3466","名稱":"德晉","貝氏評分":4.53,"分類":"pullback","現價":39.75,"漲幅":"-3.3"},{"代號":"3441","名稱":"聯一光","貝氏評分":4.53,"分類":"pullback","現價":40.55,"漲幅":"-5.3"},{"代號":"3438","名稱":"類比科","貝氏評分":4.53,"分類":"pullback","現價":63.9,"漲幅":"-1.4"},{"代號":"3362","名稱":"先進光","貝氏評分":4.53,"分類":"pullback","現價":102.0,"漲幅":"-2.4"},{"代號":"3357","名稱":"臺慶科","貝氏評分":4.53,"分類":"pullback","現價":186.5,"漲幅":"-0.5"},{"代號":"3354","名稱":"律勝","貝氏評分":4.53,"分類":"pullback","現價":35.0,"漲幅":"-1.1"},{"代號":"3339","名稱":"泰谷","貝氏評分":4.53,"分類":"pullback","現價":54.0,"漲幅":"-8.2"},{"代號":"3293","名稱":"鈊象","貝氏評分":4.53,"分類":"pullback","現價":731.0,"漲幅":"-0.5"},{"代號":"3234","名稱":"光環","貝氏評分":4.53,"分類":"pullback","現價":97.5,"漲幅":"-0.5"},{"代號":"3228","名稱":"金麗科","貝氏評分":4.53,"分類":"pullback","現價":241.5,"漲幅":"-0.2"},{"代號":"3221","名稱":"台嘉碩","貝氏評分":4.53,"分類":"pullback","現價":43.8,"漲幅":"-3.1"},{"代號":"3213","名稱":"茂訊","貝氏評分":4.53,"分類":"pullback","現價":116.5,"漲幅":"-0.9"},{"代號":"3162","名稱":"精確","貝氏評分":4.53,"分類":"pullback","現價":90.5,"漲幅":"-0.7"},{"代號":"3122","名稱":"笙泉","貝氏評分":4.53,"分類":"pullback","現價":38.5,"漲幅":"-4.2"},{"代號":"2070","名稱":"精湛","貝氏評分":4.53,"分類":"pullback","現價":69.5,"漲幅":"-3.7"},{"代號":"1785","名稱":"光洋科","貝氏評分":4.53,"分類":"pullback","現價":159.0,"漲幅":"-4.8"},{"代號":"1595","名稱":"川寶","貝氏評分":4.53,"分類":"pullback","現價":94.1,"漲幅":"-4.2"},{"代號":"1591","名稱":"駿吉-KY","貝氏評分":4.53,"分類":"pullback","現價":63.6,"漲幅":"-1.4"},{"代號":"1569","名稱":"濱川","貝氏評分":4.53,"分類":"pullback","現價":55.8,"漲幅":"-0.5"},{"代號":"6164","名稱":"華興","貝氏評分":4.37,"分類":"pullback","現價":12.3,"漲幅":"-1.2"},{"代號":"2444","名稱":"兆勁","貝氏評分":4.26,"分類":"pullback","現價":12.9,"漲幅":"-1.9"},{"代號":"9958","名稱":"世紀鋼","貝氏評分":4.53,"分類":"dark_horse","現價":103.5,"漲幅":"+0.5"},{"代號":"9941","名稱":"裕融","貝氏評分":4.53,"分類":"dark_horse","現價":75.2,"漲幅":"-0.7"},{"代號":"9933","名稱":"中鼎","貝氏評分":4.53,"分類":"dark_horse","現價":36.45,"漲幅":"-1.0"},{"代號":"8422","名稱":"可寧衛*","貝氏評分":4.53,"分類":"dark_horse","現價":27.95,"漲幅":"+0.2"},{"代號":"8374","名稱":"羅昇","貝氏評分":4.53,"分類":"dark_horse","現價":89.5,"漲幅":"+1.0"},{"代號":"8215","名稱":"明基材","貝氏評分":4.53,"分類":"dark_horse","現價":27.8,"漲幅":"+2.8"},{"代號":"8210","名稱":"勤誠","貝氏評分":4.53,"分類":"dark_horse","現價":1555.0,"漲幅":"+9.9"},{"代號":"8150","名稱":"南茂","貝氏評分":4.53,"分類":"dark_horse","現價":91.0,"漲幅":"-1.8"},{"代號":"8131","名稱":"福懋科","貝氏評分":4.53,"分類":"dark_horse","現價":67.5,"漲幅":"+2.4"},{"代號":"8070","名稱":"長華*","貝氏評分":4.53,"分類":"dark_horse","現價":48.25,"漲幅":"+0.1"},{"代號":"8028","名稱":"昇陽半導體","貝氏評分":4.53,"分類":"dark_horse","現價":234.0,"漲幅":"+3.5"},{"代號":"8016","名稱":"矽創","貝氏評分":4.53,"分類":"dark_horse","現價":268.5,"漲幅":"-1.6"},{"代號":"8011","名稱":"台通","貝氏評分":4.53,"分類":"dark_horse","現價":19.3,"漲幅":"+0.0"},{"代號":"7750","名稱":"新代","貝氏評分":4.53,"分類":"dark_horse","現價":2795.0,"漲幅":"+9.8"},{"代號":"6937","名稱":"天虹","貝氏評分":4.53,"分類":"dark_horse","現價":295.5,"漲幅":"-3.6"},{"代號":"6919","名稱":"康霈*","貝氏評分":4.53,"分類":"dark_horse","現價":103.0,"漲幅":"-1.0"},{"代號":"6909","名稱":"創控","貝氏評分":4.53,"分類":"dark_horse","現價":56.3,"漲幅":"-1.1"},{"代號":"6861","名稱":"睿生光電","貝氏評分":4.53,"分類":"dark_horse","現價":389.0,"漲幅":"+3.5"},{"代號":"6805","名稱":"富世達","貝氏評分":4.53,"分類":"dark_horse","現價":1995.0,"漲幅":"+0.8"},{"代號":"6782","名稱":"視陽","貝氏評分":4.53,"分類":"dark_horse","現價":194.5,"漲幅":"-0.8"},{"代號":"6757","名稱":"台灣虎航","貝氏評分":4.53,"分類":"dark_horse","現價":55.2,"漲幅":"-3.2"},{"代號":"6756","名稱":"威鋒電子","貝氏評分":4.53,"分類":"dark_horse","現價":95.6,"漲幅":"+3.0"},{"代號":"6719","名稱":"力智","貝氏評分":4.53,"分類":"dark_horse","現價":190.0,"漲幅":"+1.6"},{"代號":"6706","名稱":"惠特","貝氏評分":4.53,"分類":"dark_horse","現價":168.5,"漲幅":"-2.3"},{"代號":"6668","名稱":"中揚光","貝氏評分":4.53,"分類":"dark_horse","現價":36.6,"漲幅":"-0.3"},{"代號":"6605","名稱":"帝寶","貝氏評分":4.53,"分類":"dark_horse","現價":129.0,"漲幅":"-0.8"},{"代號":"6526","名稱":"達發","貝氏評分":4.53,"分類":"dark_horse","現價":750.0,"漲幅":"-0.4"},{"代號":"6525","名稱":"捷敏-KY","貝氏評分":4.53,"分類":"dark_horse","現價":109.5,"漲幅":"+2.8"},{"代號":"6477","名稱":"安集","貝氏評分":4.53,"分類":"dark_horse","現價":34.5,"漲幅":"-1.6"},{"代號":"6456","名稱":"GIS-KY","貝氏評分":4.53,"分類":"dark_horse","現價":66.6,"漲幅":"+1.7"},{"代號":"6451","名稱":"訊芯-KY","貝氏評分":4.53,"分類":"dark_horse","現價":455.5,"漲幅":"+3.3"},{"代號":"6438","名稱":"迅得","貝氏評分":4.53,"分類":"dark_horse","現價":171.0,"漲幅":"+0.3"},{"代號":"6405","名稱":"悅城","貝氏評分":4.53,"分類":"dark_horse","現價":58.0,"漲幅":"-9.9"},{"代號":"6285","名稱":"啟碁","貝氏評分":4.53,"分類":"dark_horse","現價":259.0,"漲幅":"+4.6"},{"代號":"6283","名稱":"淳安","貝氏評分":4.53,"分類":"dark_horse","現價":25.1,"漲幅":"-2.1"},{"代號":"6257","名稱":"矽格","貝氏評分":4.53,"分類":"dark_horse","現價":212.5,"漲幅":"+0.7"},{"代號":"6243","名稱":"迅杰","貝氏評分":4.53,"分類":"dark_horse","現價":34.45,"漲幅":"+0.0"},{"代號":"6239","名稱":"力成","貝氏評分":4.53,"分類":"dark_horse","現價":225.5,"漲幅":"+1.6"},{"代號":"6226","名稱":"光鼎","貝氏評分":4.53,"分類":"dark_horse","現價":12.2,"漲幅":"-0.8"},{"代號":"6224","名稱":"聚鼎","貝氏評分":4.53,"分類":"dark_horse","現價":75.7,"漲幅":"-3.8"},{"代號":"6214","名稱":"精誠","貝氏評分":4.53,"分類":"dark_horse","現價":127.0,"漲幅":"+1.2"},{"代號":"6209","名稱":"今國光","貝氏評分":4.53,"分類":"dark_horse","現價":65.8,"漲幅":"-0.3"},{"代號":"6205","名稱":"詮欣","貝氏評分":4.53,"分類":"dark_horse","現價":86.1,"漲幅":"+1.4"},{"代號":"6197","名稱":"佳必琪","貝氏評分":4.53,"分類":"dark_horse","現價":229.0,"漲幅":"+4.8"},{"代號":"6168","名稱":"宏齊","貝氏評分":4.53,"分類":"dark_horse","現價":26.5,"漲幅":"+1.5"},{"代號":"6165","名稱":"浪凡","貝氏評分":4.53,"分類":"dark_horse","現價":51.8,"漲幅":"-0.4"},{"代號":"6141","名稱":"柏承","貝氏評分":4.53,"分類":"dark_horse","現價":33.25,"漲幅":"+0.5"},{"代號":"6133","名稱":"金橋","貝氏評分":4.53,"分類":"dark_horse","現價":21.9,"漲幅":"-0.2"},{"代號":"6117","名稱":"迎廣","貝氏評分":4.53,"分類":"dark_horse","現價":80.3,"漲幅":"-0.5"},{"代號":"6112","名稱":"邁達特","貝氏評分":4.53,"分類":"dark_horse","現價":44.25,"漲幅":"-0.2"},{"代號":"5521","名稱":"工信","貝氏評分":4.53,"分類":"dark_horse","現價":12.1,"漲幅":"+4.8"},{"代號":"5284","名稱":"jpp-KY","貝氏評分":4.53,"分類":"dark_horse","現價":367.0,"漲幅":"+1.9"},{"代號":"5244","名稱":"弘凱","貝氏評分":4.53,"分類":"dark_horse","現價":40.7,"漲幅":"-3.1"},{"代號":"4989","名稱":"榮科","貝氏評分":4.53,"分類":"dark_horse","現價":94.6,"漲幅":"-0.1"},{"代號":"4968","名稱":"立積","貝氏評分":4.53,"分類":"dark_horse","現價":121.0,"漲幅":"+1.3"},{"代號":"4949","名稱":"有成精密","貝氏評分":4.53,"分類":"dark_horse","現價":95.4,"漲幅":"+1.8"},{"代號":"4934","名稱":"太極","貝氏評分":4.53,"分類":"dark_horse","現價":18.3,"漲幅":"-1.1"},{"代號":"4927","名稱":"泰鼎-KY","貝氏評分":4.53,"分類":"dark_horse","現價":54.9,"漲幅":"+0.9"},{"代號":"4904","名稱":"遠傳","貝氏評分":4.53,"分類":"dark_horse","現價":96.2,"漲幅":"+0.3"},{"代號":"4764","名稱":"雙鍵","貝氏評分":4.53,"分類":"dark_horse","現價":321.0,"漲幅":"-5.6"},{"代號":"4720","名稱":"德淵","貝氏評分":4.53,"分類":"dark_horse","現價":25.75,"漲幅":"-1.2"},{"代號":"4585","名稱":"達明","貝氏評分":4.53,"分類":"dark_horse","現價":342.0,"漲幅":"+3.8"},{"代號":"4571","名稱":"鈞興-KY","貝氏評分":4.53,"分類":"dark_horse","現價":197.5,"漲幅":"+3.9"},{"代號":"4566","名稱":"時碩工業","貝氏評分":4.53,"分類":"dark_horse","現價":68.3,"漲幅":"+1.6"},{"代號":"4562","名稱":"穎漢","貝氏評分":4.53,"分類":"dark_horse","現價":37.2,"漲幅":"-1.3"},{"代號":"4555","名稱":"氣立","貝氏評分":4.53,"分類":"dark_horse","現價":42.65,"漲幅":"+0.0"},{"代號":"4540","名稱":"全球傳動","貝氏評分":4.53,"分類":"dark_horse","現價":69.5,"漲幅":"+1.3"},{"代號":"4526","名稱":"東台","貝氏評分":4.53,"分類":"dark_horse","現價":35.25,"漲幅":"+2.2"},{"代號":"4164","名稱":"承業醫","貝氏評分":4.53,"分類":"dark_horse","現價":29.0,"漲幅":"+1.8"},{"代號":"3717","名稱":"聯嘉投控","貝氏評分":4.53,"分類":"dark_horse","現價":23.3,"漲幅":"-3.1"},{"代號":"3716","名稱":"中化控股","貝氏評分":4.53,"分類":"dark_horse","現價":34.5,"漲幅":"-1.4"},{"代號":"3715","名稱":"定穎投控","貝氏評分":4.53,"分類":"dark_horse","現價":181.5,"漲幅":"+0.6"},{"代號":"3712","名稱":"永崴投控","貝氏評分":4.53,"分類":"dark_horse","現價":20.3,"漲幅":"-1.7"},{"代號":"3711","名稱":"日月光投控","貝氏評分":4.53,"分類":"dark_horse","現價":537.0,"漲幅":"+4.1"},{"代號":"3704","名稱":"合勤控","貝氏評分":4.53,"分類":"dark_horse","現價":35.05,"漲幅":"-0.7"},{"代號":"3701","名稱":"大眾控","貝氏評分":4.53,"分類":"dark_horse","現價":62.9,"漲幅":"+3.3"},{"代號":"3673","名稱":"TPK-KY","貝氏評分":4.53,"分類":"dark_horse","現價":59.8,"漲幅":"+1.4"},{"代號":"3669","名稱":"圓展","貝氏評分":4.53,"分類":"dark_horse","現價":40.4,"漲幅":"+2.3"},{"代號":"3661","名稱":"世芯-KY","貝氏評分":4.53,"分類":"dark_horse","現價":5375.0,"漲幅":"+9.9"},{"代號":"3605","名稱":"宏致","貝氏評分":4.53,"分類":"dark_horse","現價":82.3,"漲幅":"-1.2"},{"代號":"3591","名稱":"艾笛森","貝氏評分":4.53,"分類":"dark_horse","現價":23.3,"漲幅":"-1.3"},{"代號":"3576","名稱":"聯合再生","貝氏評分":4.53,"分類":"dark_horse","現價":17.0,"漲幅":"-2.6"},{"代號":"3563","名稱":"牧德","貝氏評分":4.53,"分類":"dark_horse","現價":807.0,"漲幅":"+0.6"},{"代號":"3550","名稱":"聯穎","貝氏評分":4.53,"分類":"dark_horse","現價":21.4,"漲幅":"+0.2"},{"代號":"3535","名稱":"晶彩科","貝氏評分":4.53,"分類":"dark_horse","現價":126.0,"漲幅":"-1.9"},{"代號":"3532","名稱":"台勝科","貝氏評分":4.53,"分類":"dark_horse","現價":268.0,"漲幅":"+4.1"},{"代號":"3504","名稱":"揚明光","貝氏評分":4.53,"分類":"dark_horse","現價":62.8,"漲幅":"+1.1"},{"代號":"3481","名稱":"群創","貝氏評分":4.53,"分類":"dark_horse","現價":32.3,"漲幅":"+9.9"},{"代號":"3443","名稱":"創意","貝氏評分":4.53,"分類":"dark_horse","現價":5730.0,"漲幅":"+10.0"},{"代號":"3437","名稱":"榮創","貝氏評分":4.53,"分類":"dark_horse","現價":25.7,"漲幅":"-0.6"},{"代號":"3406","名稱":"玉晶光","貝氏評分":4.53,"分類":"dark_horse","現價":510.0,"漲幅":"+0.8"},{"代號":"3380","名稱":"明泰","貝氏評分":4.53,"分類":"dark_horse","現價":32.2,"漲幅":"+0.9"},{"代號":"3376","名稱":"新日興","貝氏評分":4.53,"分類":"dark_horse","現價":206.5,"漲幅":"+2.0"},{"代號":"3305","名稱":"昇貿","貝氏評分":4.53,"分類":"dark_horse","現價":117.0,"漲幅":"+1.7"},{"代號":"3149","名稱":"正達","貝氏評分":4.53,"分類":"dark_horse","現價":50.5,"漲幅":"+4.7"},{"代號":"3135","名稱":"凌航","貝氏評分":4.53,"分類":"dark_horse","現價":194.5,"漲幅":"+9.9"},{"代號":"3094","名稱":"聯傑","貝氏評分":4.53,"分類":"dark_horse","現價":30.9,"漲幅":"+0.0"},{"代號":"3090","名稱":"日電貿","貝氏評分":4.53,"分類":"dark_horse","現價":116.5,"漲幅":"+2.6"},{"代號":"3059","名稱":"華晶科","貝氏評分":4.53,"分類":"dark_horse","現價":40.15,"漲幅":"+2.0"},{"代號":"3058","名稱":"立德","貝氏評分":4.53,"分類":"dark_horse","現價":8.3,"漲幅":"-0.5"},{"代號":"3055","名稱":"蔚華科","貝氏評分":4.53,"分類":"dark_horse","現價":100.0,"漲幅":"+9.6"},{"代號":"3054","名稱":"立萬利","貝氏評分":4.53,"分類":"dark_horse","現價":69.6,"漲幅":"-1.1"},{"代號":"3052","名稱":"夆典","貝氏評分":4.53,"分類":"dark_horse","現價":10.7,"漲幅":"+0.5"},{"代號":"3051","名稱":"力特","貝氏評分":4.53,"分類":"dark_horse","現價":26.35,"漲幅":"+1.3"},{"代號":"3050","名稱":"鈺德","貝氏評分":4.53,"分類":"dark_horse","現價":12.35,"漲幅":"+0.4"},{"代號":"3041","名稱":"揚智","貝氏評分":4.53,"分類":"dark_horse","現價":24.7,"漲幅":"+1.6"},{"代號":"3033","名稱":"威健","貝氏評分":4.53,"分類":"dark_horse","現價":44.0,"漲幅":"+0.3"},{"代號":"3030","名稱":"德律","貝氏評分":4.53,"分類":"dark_horse","現價":397.0,"漲幅":"+1.9"},{"代號":"3029","名稱":"零壹","貝氏評分":4.53,"分類":"dark_horse","現價":99.1,"漲幅":"+0.8"},{"代號":"3025","名稱":"星通","貝氏評分":4.53,"分類":"dark_horse","現價":62.8,"漲幅":"-0.8"},{"代號":"3024","名稱":"憶聲","貝氏評分":4.53,"分類":"dark_horse","現價":14.55,"漲幅":"+2.1"},{"代號":"3023","名稱":"信邦","貝氏評分":4.53,"分類":"dark_horse","現價":302.0,"漲幅":"-0.2"},{"代號":"3016","名稱":"嘉晶","貝氏評分":4.53,"分類":"dark_horse","現價":128.5,"漲幅":"+9.8"},{"代號":"3011","名稱":"今皓","貝氏評分":4.53,"分類":"dark_horse","現價":13.75,"漲幅":"+2.2"},{"代號":"3006","名稱":"晶豪科","貝氏評分":4.53,"分類":"dark_horse","現價":222.0,"漲幅":"+9.9"},{"代號":"3004","名稱":"豐達科","貝氏評分":4.53,"分類":"dark_horse","現價":114.5,"漲幅":"-2.1"},{"代號":"2915","名稱":"潤泰全","貝氏評分":4.53,"分類":"dark_horse","現價":43.65,"漲幅":"+0.9"},{"代號":"2913","名稱":"農林","貝氏評分":4.53,"分類":"dark_horse","現價":11.3,"漲幅":"+0.4"},{"代號":"2884","名稱":"玉山金","貝氏評分":4.53,"分類":"dark_horse","現價":32.3,"漲幅":"-0.6"},{"代號":"2883","名稱":"凱基金","貝氏評分":4.53,"分類":"dark_horse","現價":22.8,"漲幅":"-0.4"},{"代號":"2882","名稱":"國泰金","貝氏評分":4.53,"分類":"dark_horse","現價":78.4,"漲幅":"-2.0"},{"代號":"2881","名稱":"富邦金","貝氏評分":4.53,"分類":"dark_horse","現價":95.5,"漲幅":"-1.2"},{"代號":"2880","名稱":"華南金","貝氏評分":4.53,"分類":"dark_horse","現價":33.25,"漲幅":"-0.2"},{"代號":"2727","名稱":"王品","貝氏評分":4.53,"分類":"dark_horse","現價":235.0,"漲幅":"+0.2"},{"代號":"2637","名稱":"慧洋-KY","貝氏評分":4.53,"分類":"dark_horse","現價":74.5,"漲幅":"-0.1"},{"代號":"2618","名稱":"長榮航","貝氏評分":4.53,"分類":"dark_horse","現價":35.85,"漲幅":"+0.6"},{"代號":"2606","名稱":"裕民","貝氏評分":4.53,"分類":"dark_horse","現價":65.3,"漲幅":"+0.5"},{"代號":"2601","名稱":"益航","貝氏評分":4.53,"分類":"dark_horse","現價":4.97,"漲幅":"+1.2"},{"代號":"2540","名稱":"愛山林","貝氏評分":4.53,"分類":"dark_horse","現價":51.5,"漲幅":"+0.4"},{"代號":"2505","名稱":"國揚","貝氏評分":4.53,"分類":"dark_horse","現價":17.65,"漲幅":"-0.6"},{"代號":"2497","名稱":"怡利電","貝氏評分":4.53,"分類":"dark_horse","現價":58.6,"漲幅":"-3.5"},{"代號":"2495","名稱":"普安","貝氏評分":4.53,"分類":"dark_horse","現價":36.35,"漲幅":"-1.2"},{"代號":"2493","名稱":"揚博","貝氏評分":4.53,"分類":"dark_horse","現價":129.5,"漲幅":"-1.5"},{"代號":"2489","名稱":"瑞軒","貝氏評分":4.53,"分類":"dark_horse","現價":43.0,"漲幅":"+3.4"},{"代號":"2486","名稱":"一詮","貝氏評分":4.53,"分類":"dark_horse","現價":281.5,"漲幅":"+0.0"},{"代號":"2485","名稱":"兆赫","貝氏評分":4.53,"分類":"dark_horse","現價":67.6,"漲幅":"-1.5"},{"代號":"2484","名稱":"希華","貝氏評分":4.53,"分類":"dark_horse","現價":39.6,"漲幅":"-5.3"},{"代號":"2478","名稱":"大毅","貝氏評分":4.53,"分類":"dark_horse","現價":77.9,"漲幅":"-0.3"},{"代號":"2466","名稱":"冠西電","貝氏評分":4.53,"分類":"dark_horse","現價":51.6,"漲幅":"+2.4"},{"代號":"2465","名稱":"麗臺","貝氏評分":4.53,"分類":"dark_horse","現價":86.9,"漲幅":"+8.0"},{"代號":"2460","名稱":"建通","貝氏評分":4.53,"分類":"dark_horse","現價":33.0,"漲幅":"+3.1"},{"代號":"2455","名稱":"全新","貝氏評分":4.53,"分類":"dark_horse","現價":360.0,"漲幅":"+6.8"},{"代號":"2454","名稱":"聯發科","貝氏評分":4.53,"分類":"dark_horse","現價":3880.0,"漲幅":"+6.9"},{"代號":"2441","名稱":"超豐","貝氏評分":4.53,"分類":"dark_horse","現價":92.4,"漲幅":"+2.1"},{"代號":"2440","名稱":"太空梭","貝氏評分":4.53,"分類":"dark_horse","現價":16.95,"漲幅":"+1.2"},{"代號":"2439","名稱":"美律","貝氏評分":4.53,"分類":"dark_horse","現價":86.4,"漲幅":"+0.2"},{"代號":"2426","名稱":"鼎元","貝氏評分":4.53,"分類":"dark_horse","現價":66.7,"漲幅":"-1.2"},{"代號":"2419","名稱":"仲琦","貝氏評分":4.53,"分類":"dark_horse","現價":30.0,"漲幅":"-0.2"},{"代號":"2417","名稱":"圓剛","貝氏評分":4.53,"分類":"dark_horse","現價":51.0,"漲幅":"+1.2"},{"代號":"2412","名稱":"中華電","貝氏評分":4.53,"分類":"dark_horse","現價":135.5,"漲幅":"-0.7"},{"代號":"2408","名稱":"南亞科","貝氏評分":4.53,"分類":"dark_horse","現價":301.0,"漲幅":"+9.9"},{"代號":"2402","名稱":"毅嘉","貝氏評分":4.53,"分類":"dark_horse","現價":69.0,"漲幅":"+1.5"},{"代號":"2395","名稱":"研華","貝氏評分":4.53,"分類":"dark_horse","現價":478.5,"漲幅":"+0.4"},{"代號":"2393","名稱":"億光","貝氏評分":4.53,"分類":"dark_horse","現價":73.8,"漲幅":"+0.1"},{"代號":"2392","名稱":"正崴","貝氏評分":4.53,"分類":"dark_horse","現價":39.15,"漲幅":"+0.9"},{"代號":"2388","名稱":"威盛","貝氏評分":4.53,"分類":"dark_horse","現價":76.7,"漲幅":"+7.4"},{"代號":"2382","名稱":"廣達","貝氏評分":4.53,"分類":"dark_horse","現價":343.5,"漲幅":"+0.9"},{"代號":"2375","名稱":"凱美","貝氏評分":4.53,"分類":"dark_horse","現價":91.5,"漲幅":"+1.2"},{"代號":"2374","名稱":"佳能","貝氏評分":4.53,"分類":"dark_horse","現價":80.5,"漲幅":"+2.5"},{"代號":"2371","名稱":"大同","貝氏評分":4.53,"分類":"dark_horse","現價":30.55,"漲幅":"+0.0"},{"代號":"2369","名稱":"菱生","貝氏評分":4.53,"分類":"dark_horse","現價":31.0,"漲幅":"+1.0"},{"代號":"2360","名稱":"致茂","貝氏評分":4.53,"分類":"dark_horse","現價":2360.0,"漲幅":"+5.8"},{"代號":"2354","名稱":"鴻準","貝氏評分":4.53,"分類":"dark_horse","現價":61.6,"漲幅":"+0.3"},{"代號":"2349","名稱":"錸德","貝氏評分":4.53,"分類":"dark_horse","現價":12.6,"漲幅":"+1.2"},{"代號":"2344","名稱":"華邦電","貝氏評分":4.53,"分類":"dark_horse","現價":117.5,"漲幅":"+9.8"},{"代號":"2342","名稱":"茂矽","貝氏評分":4.53,"分類":"dark_horse","現價":43.05,"漲幅":"-1.7"},{"代號":"2340","名稱":"台亞","貝氏評分":4.53,"分類":"dark_horse","現價":37.35,"漲幅":"+0.1"},{"代號":"2338","名稱":"光罩","貝氏評分":4.53,"分類":"dark_horse","現價":50.0,"漲幅":"-2.9"},{"代號":"2337","名稱":"旺宏","貝氏評分":4.53,"分類":"dark_horse","現價":159.5,"漲幅":"+4.2"},{"代號":"2331","名稱":"精英","貝氏評分":4.53,"分類":"dark_horse","現價":20.9,"漲幅":"+2.7"},{"代號":"2329","名稱":"華泰","貝氏評分":4.53,"分類":"dark_horse","現價":59.0,"漲幅":"-1.2"},{"代號":"2323","名稱":"中環","貝氏評分":4.53,"分類":"dark_horse","現價":10.6,"漲幅":"+0.5"},{"代號":"2317","名稱":"鴻海","貝氏評分":4.53,"分類":"dark_horse","現價":252.0,"漲幅":"+0.8"},{"代號":"2308","名稱":"台達電","貝氏評分":4.53,"分類":"dark_horse","現價":2245.0,"漲幅":"+2.0"},{"代號":"2303","名稱":"聯電","貝氏評分":4.53,"分類":"dark_horse","現價":95.0,"漲幅":"+4.1"},{"代號":"2301","名稱":"光寶科","貝氏評分":4.53,"分類":"dark_horse","現價":224.0,"漲幅":"+9.8"},{"代號":"2233","名稱":"宇隆","貝氏評分":4.53,"分類":"dark_horse","現價":302.5,"漲幅":"+3.6"},{"代號":"2206","名稱":"三陽工業","貝氏評分":4.53,"分類":"dark_horse","現價":58.1,"漲幅":"+0.2"},{"代號":"2106","名稱":"建大","貝氏評分":4.53,"分類":"dark_horse","現價":17.35,"漲幅":"+0.9"},{"代號":"2031","名稱":"新光鋼","貝氏評分":4.53,"分類":"dark_horse","現價":39.9,"漲幅":"+0.6"},{"代號":"2006","名稱":"東和鋼鐵","貝氏評分":4.53,"分類":"dark_horse","現價":67.7,"漲幅":"+0.4"},{"代號":"1810","名稱":"和成","貝氏評分":4.53,"分類":"dark_horse","現價":18.15,"漲幅":"-1.9"},{"代號":"1809","名稱":"中釉","貝氏評分":4.53,"分類":"dark_horse","現價":39.6,"漲幅":"+10.0"},{"代號":"1802","名稱":"台玻","貝氏評分":4.53,"分類":"dark_horse","現價":69.9,"漲幅":"+1.5"},{"代號":"1616","名稱":"億泰","貝氏評分":4.53,"分類":"dark_horse","現價":22.35,"漲幅":"+0.9"},{"代號":"1608","名稱":"華榮","貝氏評分":4.53,"分類":"dark_horse","現價":34.25,"漲幅":"+0.7"},{"代號":"1598","名稱":"岱宇","貝氏評分":4.53,"分類":"dark_horse","現價":21.8,"漲幅":"-1.8"},{"代號":"1597","名稱":"直得","貝氏評分":4.53,"分類":"dark_horse","現價":182.0,"漲幅":"+5.2"},{"代號":"1582","名稱":"信錦","貝氏評分":4.53,"分類":"dark_horse","現價":89.5,"漲幅":"+1.9"},{"代號":"1563","名稱":"巧新","貝氏評分":4.53,"分類":"dark_horse","現價":43.8,"漲幅":"-0.2"},{"代號":"1536","名稱":"和大","貝氏評分":4.53,"分類":"dark_horse","現價":55.3,"漲幅":"+3.0"},{"代號":"1532","名稱":"勤美","貝氏評分":4.53,"分類":"dark_horse","現價":20.6,"漲幅":"-0.2"},{"代號":"1528","名稱":"恩德","貝氏評分":4.53,"分類":"dark_horse","現價":26.15,"漲幅":"-1.5"},{"代號":"1524","名稱":"耿鼎","貝氏評分":4.53,"分類":"dark_horse","現價":29.55,"漲幅":"+1.5"},{"代號":"1522","名稱":"堤維西","貝氏評分":4.53,"分類":"dark_horse","現價":31.6,"漲幅":"-1.6"},{"代號":"1513","名稱":"中興電","貝氏評分":4.53,"分類":"dark_horse","現價":158.5,"漲幅":"+0.3"},{"代號":"1504","名稱":"東元","貝氏評分":4.53,"分類":"dark_horse","現價":72.6,"漲幅":"-0.3"},{"代號":"1477","名稱":"聚陽","貝氏評分":4.53,"分類":"dark_horse","現價":218.0,"漲幅":"-1.6"},{"代號":"1460","名稱":"宏遠","貝氏評分":4.53,"分類":"dark_horse","現價":7.19,"漲幅":"-0.8"},{"代號":"1319","名稱":"東陽","貝氏評分":4.53,"分類":"dark_horse","現價":80.8,"漲幅":"+0.7"},{"代號":"1313","名稱":"聯成","貝氏評分":4.53,"分類":"dark_horse","現價":11.25,"漲幅":"+1.4"},{"代號":"1310","名稱":"台苯","貝氏評分":4.53,"分類":"dark_horse","現價":8.64,"漲幅":"+0.1"},{"代號":"1309","名稱":"台達化","貝氏評分":4.53,"分類":"dark_horse","現價":16.9,"漲幅":"+0.3"},{"代號":"1304","名稱":"台聚","貝氏評分":4.53,"分類":"dark_horse","現價":13.05,"漲幅":"+2.8"},{"代號":"1303","名稱":"南亞","貝氏評分":4.53,"分類":"dark_horse","現價":91.5,"漲幅":"+3.3"},{"代號":"1301","名稱":"台塑","貝氏評分":4.53,"分類":"dark_horse","現價":49.25,"漲幅":"+1.4"},{"代號":"8927","名稱":"北基","貝氏評分":4.53,"分類":"dark_horse","現價":20.0,"漲幅":"-1.5"},{"代號":"8924","名稱":"大田","貝氏評分":4.53,"分類":"dark_horse","現價":64.0,"漲幅":"+0.5"},{"代號":"8299","名稱":"群聯","貝氏評分":4.53,"分類":"dark_horse","現價":2670.0,"漲幅":"+9.9"},{"代號":"8234","名稱":"新漢","貝氏評分":4.53,"分類":"dark_horse","現價":71.2,"漲幅":"+1.0"},{"代號":"8182","名稱":"加高","貝氏評分":4.53,"分類":"dark_horse","現價":37.4,"漲幅":"-5.3"},{"代號":"8155","名稱":"博智","貝氏評分":4.53,"分類":"dark_horse","現價":420.0,"漲幅":"-5.4"},{"代號":"8074","名稱":"鉅橡","貝氏評分":4.53,"分類":"dark_horse","現價":83.0,"漲幅":"+1.1"},{"代號":"8071","名稱":"能率網通","貝氏評分":4.53,"分類":"dark_horse","現價":16.8,"漲幅":"+0.3"},{"代號":"8069","名稱":"元太","貝氏評分":4.53,"分類":"dark_horse","現價":178.0,"漲幅":"+9.9"},{"代號":"8064","名稱":"東捷","貝氏評分":4.53,"分類":"dark_horse","現價":113.5,"漲幅":"+9.7"},{"代號":"8043","名稱":"蜜望實","貝氏評分":4.53,"分類":"dark_horse","現價":84.7,"漲幅":"-5.7"},{"代號":"8042","名稱":"金山電","貝氏評分":4.53,"分類":"dark_horse","現價":88.9,"漲幅":"+5.7"},{"代號":"8040","名稱":"九暘","貝氏評分":4.53,"分類":"dark_horse","現價":78.0,"漲幅":"+0.3"},{"代號":"8027","名稱":"鈦昇","貝氏評分":4.53,"分類":"dark_horse","現價":223.0,"漲幅":"+9.9"},{"代號":"7777","名稱":"能率亞洲","貝氏評分":4.53,"分類":"dark_horse","現價":28.75,"漲幅":"+0.0"},{"代號":"7712","名稱":"博盛半導體","貝氏評分":4.53,"分類":"dark_horse","現價":147.5,"漲幅":"+9.7"},{"代號":"7709","名稱":"榮田","貝氏評分":4.53,"分類":"dark_horse","現價":82.8,"漲幅":"-1.7"},{"代號":"7547","名稱":"碩網","貝氏評分":4.53,"分類":"dark_horse","現價":71.2,"漲幅":"-2.3"},{"代號":"6907","名稱":"雅特力-KY","貝氏評分":4.53,"分類":"dark_horse","現價":133.0,"漲幅":"+2.7"},{"代號":"6877","名稱":"鏵友益","貝氏評分":4.53,"分類":"dark_horse","現價":163.0,"漲幅":"-1.8"},{"代號":"6823","名稱":"濾能","貝氏評分":4.53,"分類":"dark_horse","現價":88.8,"漲幅":"+0.1"},{"代號":"6821","名稱":"聯寶","貝氏評分":4.53,"分類":"dark_horse","現價":50.0,"漲幅":"-2.0"},{"代號":"6735","名稱":"美達科技","貝氏評分":4.53,"分類":"dark_horse","現價":125.0,"漲幅":"-1.2"},{"代號":"6683","名稱":"雍智科技","貝氏評分":4.53,"分類":"dark_horse","現價":2270.0,"漲幅":"+2.7"},{"代號":"6679","名稱":"鈺太","貝氏評分":4.53,"分類":"dark_horse","現價":327.0,"漲幅":"-1.2"},{"代號":"6664","名稱":"群翊","貝氏評分":4.53,"分類":"dark_horse","現價":439.5,"漲幅":"-0.8"},{"代號":"6642","名稱":"富致","貝氏評分":4.53,"分類":"dark_horse","現價":64.3,"漲幅":"-0.2"},{"代號":"6609","名稱":"瀧澤科","貝氏評分":4.53,"分類":"dark_horse","現價":43.3,"漲幅":"+1.6"},{"代號":"6603","名稱":"富強鑫","貝氏評分":4.53,"分類":"dark_horse","現價":23.9,"漲幅":"-1.2"},{"代號":"6588","名稱":"東典光電","貝氏評分":4.53,"分類":"dark_horse","現價":145.0,"漲幅":"+1.4"},{"代號":"6584","名稱":"南俊國際","貝氏評分":4.53,"分類":"dark_horse","現價":687.0,"漲幅":"+2.7"},{"代號":"6568","名稱":"宏觀","貝氏評分":4.53,"分類":"dark_horse","現價":226.0,"漲幅":"-3.0"},{"代號":"6546","名稱":"正基","貝氏評分":4.53,"分類":"dark_horse","現價":68.8,"漲幅":"-1.7"},{"代號":"6530","名稱":"創威","貝氏評分":4.53,"分類":"dark_horse","現價":110.5,"漲幅":"+2.3"},{"代號":"1101","名稱":"台泥","貝氏評分":4.53,"分類":"dark_horse","現價":25.4,"漲幅":"+1.6"},{"代號":"6488","名稱":"環球晶","貝氏評分":4.53,"分類":"dark_horse","現價":835.0,"漲幅":"+4.1"},{"代號":"6485","名稱":"點序","貝氏評分":4.53,"分類":"dark_horse","現價":84.2,"漲幅":"+1.9"},{"代號":"6441","名稱":"廣錠","貝氏評分":4.53,"分類":"dark_horse","現價":27.55,"漲幅":"-0.9"},{"代號":"6274","名稱":"台燿","貝氏評分":4.53,"分類":"dark_horse","現價":1455.0,"漲幅":"+6.2"},{"代號":"6270","名稱":"倍微","貝氏評分":4.53,"分類":"dark_horse","現價":27.3,"漲幅":"-1.3"},{"代號":"6244","名稱":"茂迪","貝氏評分":4.53,"分類":"dark_horse","現價":29.9,"漲幅":"+0.7"},{"代號":"6233","名稱":"旺玖","貝氏評分":4.53,"分類":"dark_horse","現價":26.5,"漲幅":"-1.1"},{"代號":"6231","名稱":"系微","貝氏評分":4.53,"分類":"dark_horse","現價":316.0,"漲幅":"-1.9"},{"代號":"6229","名稱":"研通","貝氏評分":4.53,"分類":"dark_horse","現價":29.35,"漲幅":"+1.2"},{"代號":"6218","名稱":"豪勉","貝氏評分":4.53,"分類":"dark_horse","現價":37.3,"漲幅":"-4.4"},{"代號":"6207","名稱":"雷科","貝氏評分":4.53,"分類":"dark_horse","現價":68.3,"漲幅":"+7.4"},{"代號":"6199","名稱":"天品","貝氏評分":4.53,"分類":"dark_horse","現價":100.5,"漲幅":"+4.7"},{"代號":"6187","名稱":"萬潤","貝氏評分":4.53,"分類":"dark_horse","現價":1110.0,"漲幅":"+3.7"},{"代號":"6180","名稱":"橘子","貝氏評分":4.53,"分類":"dark_horse","現價":39.4,"漲幅":"+0.4"},{"代號":"6146","名稱":"耕興","貝氏評分":4.53,"分類":"dark_horse","現價":213.5,"漲幅":"-1.8"},{"代號":"6129","名稱":"普誠","貝氏評分":4.53,"分類":"dark_horse","現價":16.4,"漲幅":"+1.5"},{"代號":"6127","名稱":"九豪","貝氏評分":4.53,"分類":"dark_horse","現價":47.5,"漲幅":"-1.1"},{"代號":"6125","名稱":"廣運","貝氏評分":4.53,"分類":"dark_horse","現價":59.7,"漲幅":"+1.0"},{"代號":"6113","名稱":"亞矽","貝氏評分":4.53,"分類":"dark_horse","現價":24.5,"漲幅":"-0.2"},{"代號":"5490","名稱":"同亨","貝氏評分":4.53,"分類":"dark_horse","現價":28.55,"漲幅":"+1.6"},{"代號":"5474","名稱":"聰泰","貝氏評分":4.53,"分類":"dark_horse","現價":164.5,"漲幅":"-0.6"},{"代號":"5464","名稱":"霖宏","貝氏評分":4.53,"分類":"dark_horse","現價":57.6,"漲幅":"+9.9"},{"代號":"5443","名稱":"均豪","貝氏評分":4.53,"分類":"dark_horse","現價":129.5,"漲幅":"+6.6"},{"代號":"5439","名稱":"高技","貝氏評分":4.53,"分類":"dark_horse","現價":391.0,"漲幅":"+0.8"},{"代號":"5410","名稱":"國眾","貝氏評分":4.53,"分類":"dark_horse","現價":37.0,"漲幅":"+0.8"},{"代號":"5392","名稱":"能率","貝氏評分":4.53,"分類":"dark_horse","現價":42.0,"漲幅":"+4.2"},{"代號":"5386","名稱":"青雲","貝氏評分":4.53,"分類":"dark_horse","現價":439.5,"漲幅":"-6.5"},{"代號":"5340","名稱":"建榮","貝氏評分":4.53,"分類":"dark_horse","現價":111.5,"漲幅":"+0.0"},{"代號":"5289","名稱":"宜鼎","貝氏評分":4.53,"分類":"dark_horse","現價":1760.0,"漲幅":"+10.0"},{"代號":"5210","名稱":"寶碩","貝氏評分":4.53,"分類":"dark_horse","現價":27.8,"漲幅":"-0.9"},{"代號":"4991","名稱":"環宇-KY","貝氏評分":4.53,"分類":"dark_horse","現價":686.0,"漲幅":"+6.5"},{"代號":"4973","名稱":"廣穎","貝氏評分":4.53,"分類":"dark_horse","現價":109.5,"漲幅":"+9.9"},{"代號":"4951","名稱":"精拓科","貝氏評分":4.53,"分類":"dark_horse","現價":121.5,"漲幅":"-2.0"},{"代號":"4933","名稱":"友輝","貝氏評分":4.53,"分類":"dark_horse","現價":69.8,"漲幅":"+1.0"},{"代號":"4908","名稱":"前鼎","貝氏評分":4.53,"分類":"dark_horse","現價":227.5,"漲幅":"-0.9"},{"代號":"4903","名稱":"聯光通","貝氏評分":4.53,"分類":"dark_horse","現價":43.3,"漲幅":"+0.7"},{"代號":"4741","名稱":"泓瀚","貝氏評分":4.53,"分類":"dark_horse","現價":61.6,"漲幅":"+0.0"},{"代號":"4716","名稱":"大立","貝氏評分":4.53,"分類":"dark_horse","現價":15.05,"漲幅":"+0.3"},{"代號":"4563","名稱":"百德","貝氏評分":4.53,"分類":"dark_horse","現價":50.3,"漲幅":"+3.6"},{"代號":"4561","名稱":"健椿","貝氏評分":4.53,"分類":"dark_horse","現價":51.6,"漲幅":"+0.4"},{"代號":"4556","名稱":"旭然","貝氏評分":4.53,"分類":"dark_horse","現價":45.55,"漲幅":"+7.7"},{"代號":"4542","名稱":"科嶠","貝氏評分":4.53,"分類":"dark_horse","現價":194.5,"漲幅":"-0.8"},{"代號":"4533","名稱":"協易機","貝氏評分":4.53,"分類":"dark_horse","現價":31.75,"漲幅":"+4.1"},{"代號":"4510","名稱":"高鋒","貝氏評分":4.53,"分類":"dark_horse","現價":47.15,"漲幅":"+0.3"},{"代號":"4174","名稱":"浩鼎","貝氏評分":4.53,"分類":"dark_horse","現價":33.35,"漲幅":"-2.1"},{"代號":"4105","名稱":"東洋","貝氏評分":4.53,"分類":"dark_horse","現價":75.2,"漲幅":"-0.3"},{"代號":"3707","名稱":"漢磊","貝氏評分":4.53,"分類":"dark_horse","現價":74.9,"漲幅":"+2.3"},{"代號":"3689","名稱":"湧德","貝氏評分":4.53,"分類":"dark_horse","現價":124.5,"漲幅":"-1.2"},{"代號":"3625","名稱":"西勝","貝氏評分":4.53,"分類":"dark_horse","現價":15.1,"漲幅":"-1.3"},{"代號":"3615","名稱":"安可","貝氏評分":4.53,"分類":"dark_horse","現價":33.5,"漲幅":"-1.8"},{"代號":"3567","名稱":"逸昌","貝氏評分":4.53,"分類":"dark_horse","現價":29.35,"漲幅":"-1.5"},{"代號":"3548","名稱":"兆利","貝氏評分":4.53,"分類":"dark_horse","現價":100.5,"漲幅":"+0.5"},{"代號":"3526","名稱":"凡甲","貝氏評分":4.53,"分類":"dark_horse","現價":388.0,"漲幅":"-1.8"},{"代號":"3520","名稱":"華盈","貝氏評分":4.53,"分類":"dark_horse","現價":15.45,"漲幅":"-0.6"},{"代號":"3511","名稱":"矽瑪","貝氏評分":4.53,"分類":"dark_horse","現價":21.5,"漲幅":"-2.3"},{"代號":"3498","名稱":"陽程","貝氏評分":4.53,"分類":"dark_horse","現價":102.5,"漲幅":"+9.6"},{"代號":"3490","名稱":"單井","貝氏評分":4.53,"分類":"dark_horse","現價":30.75,"漲幅":"-0.6"},{"代號":"3467","名稱":"台灣精材","貝氏評分":4.53,"分類":"dark_horse","現價":71.4,"漲幅":"-0.8"},{"代號":"3455","名稱":"由田","貝氏評分":4.53,"分類":"dark_horse","現價":286.0,"漲幅":"+10.0"},{"代號":"3444","名稱":"利機","貝氏評分":4.53,"分類":"dark_horse","現價":89.2,"漲幅":"+0.2"},{"代號":"3438","名稱":"類比科","貝氏評分":4.53,"分類":"dark_horse","現價":63.9,"漲幅":"-1.4"},{"代號":"3402","名稱":"漢科","貝氏評分":4.53,"分類":"dark_horse","現價":139.5,"漲幅":"+0.4"},{"代號":"3390","名稱":"旭軟","貝氏評分":4.53,"分類":"dark_horse","現價":27.75,"漲幅":"+2.4"},{"代號":"3388","名稱":"崇越電","貝氏評分":4.53,"分類":"dark_horse","現價":110.0,"漲幅":"+0.5"},{"代號":"3372","名稱":"典範","貝氏評分":4.53,"分類":"dark_horse","現價":19.75,"漲幅":"+0.0"},{"代號":"3354","名稱":"律勝","貝氏評分":4.53,"分類":"dark_horse","現價":35.0,"漲幅":"-1.1"},{"代號":"3322","名稱":"建舜電","貝氏評分":4.53,"分類":"dark_horse","現價":13.15,"漲幅":"+0.4"},{"代號":"3303","名稱":"岱稜","貝氏評分":4.53,"分類":"dark_horse","現價":52.0,"漲幅":"+0.0"},{"代號":"3293","名稱":"鈊象","貝氏評分":4.53,"分類":"dark_horse","現價":731.0,"漲幅":"-0.5"},{"代號":"3265","名稱":"台星科","貝氏評分":4.53,"分類":"dark_horse","現價":180.5,"漲幅":"+0.8"},{"代號":"3264","名稱":"欣銓","貝氏評分":4.53,"分類":"dark_horse","現價":225.5,"漲幅":"+0.7"},{"代號":"3260","名稱":"威剛","貝氏評分":4.53,"分類":"dark_horse","現價":457.0,"漲幅":"+1.9"},{"代號":"3213","名稱":"茂訊","貝氏評分":4.53,"分類":"dark_horse","現價":116.5,"漲幅":"-0.9"},{"代號":"3188","名稱":"鑫龍騰","貝氏評分":4.53,"分類":"dark_horse","現價":24.1,"漲幅":"-1.0"},{"代號":"3163","名稱":"波若威","貝氏評分":4.53,"分類":"dark_horse","現價":1040.0,"漲幅":"+3.0"},{"代號":"3162","名稱":"精確","貝氏評分":4.53,"分類":"dark_horse","現價":90.5,"漲幅":"-0.7"},{"代號":"3105","名稱":"穩懋","貝氏評分":4.53,"分類":"dark_horse","現價":526.0,"漲幅":"+6.8"},{"代號":"3093","名稱":"港建*","貝氏評分":4.53,"分類":"dark_horse","現價":59.5,"漲幅":"+0.5"},{"代號":"3086","名稱":"華義","貝氏評分":4.53,"分類":"dark_horse","現價":40.05,"漲幅":"+0.4"},{"代號":"3081","名稱":"聯亞","貝氏評分":4.53,"分類":"dark_horse","現價":2780.0,"漲幅":"+6.1"},{"代號":"2070","名稱":"精湛","貝氏評分":4.53,"分類":"dark_horse","現價":69.5,"漲幅":"-3.7"},{"代號":"1815","名稱":"富喬","貝氏評分":4.53,"分類":"dark_horse","現價":110.5,"漲幅":"+3.3"},{"代號":"1595","名稱":"川寶","貝氏評分":4.53,"分類":"dark_horse","現價":94.1,"漲幅":"-4.2"},{"代號":"1569","名稱":"濱川","貝氏評分":4.53,"分類":"dark_horse","現價":55.8,"漲幅":"-0.5"},{"代號":"9939","名稱":"宏全","貝氏評分":4.53,"分類":"explosive","現價":120.0,"漲幅":"+7.6"},{"代號":"9934","名稱":"成霖","貝氏評分":4.53,"分類":"explosive","現價":9.88,"漲幅":"+6.6"},{"代號":"8213","名稱":"志超","貝氏評分":4.53,"分類":"explosive","現價":41.8,"漲幅":"+10.0"},{"代號":"8114","名稱":"振樺電","貝氏評分":4.53,"分類":"explosive","現價":218.0,"漲幅":"+9.8"},{"代號":"8021","名稱":"尖點","貝氏評分":4.53,"分類":"explosive","現價":429.0,"漲幅":"+7.0"},{"代號":"6901","名稱":"鑽石投資","貝氏評分":4.53,"分類":"explosive","現價":14.05,"漲幅":"+8.1"},{"代號":"6415","名稱":"矽力*-KY","貝氏評分":4.53,"分類":"explosive","現價":468.0,"漲幅":"+10.0"},{"代號":"6282","名稱":"康舒","貝氏評分":4.53,"分類":"explosive","現價":55.4,"漲幅":"+9.9"},{"代號":"5876","名稱":"上海商銀","貝氏評分":4.53,"分類":"explosive","現價":39.85,"漲幅":"+2.4"},{"代號":"5471","名稱":"松翰","貝氏評分":4.53,"分類":"explosive","現價":49.85,"漲幅":"+9.9"},{"代號":"5285","名稱":"界霖","貝氏評分":4.53,"分類":"explosive","現價":67.8,"漲幅":"+9.9"},{"代號":"4770","名稱":"上品","貝氏評分":4.53,"分類":"explosive","現價":240.0,"漲幅":"+7.4"},{"代號":"3229","名稱":"晟鈦","貝氏評分":4.53,"分類":"explosive","現價":44.8,"漲幅":"+9.9"},{"代號":"3003","名稱":"健和興","貝氏評分":4.53,"分類":"explosive","現價":59.1,"漲幅":"+5.9"},{"代號":"2897","名稱":"王道銀行","貝氏評分":4.53,"分類":"explosive","現價":10.25,"漲幅":"+1.0"},{"代號":"2535","名稱":"達欣工","貝氏評分":4.53,"分類":"explosive","現價":74.4,"漲幅":"+0.3"},{"代號":"2425","名稱":"承啟","貝氏評分":4.53,"分類":"explosive","現價":32.9,"漲幅":"+6.6"},{"代號":"2377","名稱":"微星","貝氏評分":4.53,"分類":"explosive","現價":107.5,"漲幅":"+7.5"},{"代號":"2305","名稱":"全友","貝氏評分":4.53,"分類":"explosive","現價":17.55,"漲幅":"-1.4"},{"代號":"2032","名稱":"新鋼","貝氏評分":4.53,"分類":"explosive","現價":17.7,"漲幅":"+6.9"},{"代號":"2030","名稱":"彰源","貝氏評分":4.53,"分類":"explosive","現價":18.0,"漲幅":"+9.8"},{"代號":"1721","名稱":"三晃","貝氏評分":4.53,"分類":"explosive","現價":31.35,"漲幅":"+10.0"},{"代號":"1714","名稱":"和桐","貝氏評分":4.53,"分類":"explosive","現價":9.81,"漲幅":"+6.3"},{"代號":"1515","名稱":"力山","貝氏評分":4.53,"分類":"explosive","現價":24.1,"漲幅":"+9.8"},{"代號":"8415","名稱":"大國鋼","貝氏評分":4.53,"分類":"explosive","現價":34.55,"漲幅":"+0.6"},{"代號":"8390","名稱":"金益鼎","貝氏評分":4.53,"分類":"explosive","現價":103.5,"漲幅":"+10.0"},{"代號":"8091","名稱":"翔名","貝氏評分":4.53,"分類":"explosive","現價":200.0,"漲幅":"+4.7"},{"代號":"6651","名稱":"全宇昕","貝氏評分":4.53,"分類":"explosive","現價":133.5,"漲幅":"+9.9"},{"代號":"6425","名稱":"易發","貝氏評分":4.53,"分類":"explosive","現價":88.0,"漲幅":"+8.2"},{"代號":"6259","名稱":"百徽","貝氏評分":4.53,"分類":"explosive","現價":24.8,"漲幅":"+10.0"},{"代號":"6151","名稱":"晉倫","貝氏評分":4.53,"分類":"explosive","現價":39.0,"漲幅":"+5.3"},{"代號":"6143","名稱":"振曜","貝氏評分":4.53,"分類":"explosive","現價":97.6,"漲幅":"+6.1"},{"代號":"6021","名稱":"美好證","貝氏評分":4.53,"分類":"explosive","現價":35.4,"漲幅":"+1.3"},{"代號":"5014","名稱":"建錩","貝氏評分":4.53,"分類":"explosive","現價":10.35,"漲幅":"+9.8"},{"代號":"4707","名稱":"磐亞","貝氏評分":4.53,"分類":"explosive","現價":16.5,"漲幅":"+7.1"},{"代號":"3363","名稱":"上詮","貝氏評分":4.53,"分類":"explosive","現價":853.0,"漲幅":"+5.3"},{"代號":"3323","名稱":"加百裕","貝氏評分":4.53,"分類":"explosive","現價":36.3,"漲幅":"+4.5"},{"代號":"3276","名稱":"宇環","貝氏評分":4.53,"分類":"explosive","現價":16.5,"漲幅":"+1.9"},{"代號":"3508","名稱":"位速","貝氏評分":4.5,"分類":"dark_horse","現價":21.0,"漲幅":"-4.5"},{"代號":"2511","名稱":"太子","貝氏評分":4.49,"分類":"dark_horse","現價":7.82,"漲幅":"+0.1"},{"代號":"3379","名稱":"彬台","貝氏評分":4.47,"分類":"dark_horse","現價":36.6,"漲幅":"-1.9"},{"代號":"4113","名稱":"聯上","貝氏評分":4.43,"分類":"dark_horse","現價":14.75,"漲幅":"-0.7"},{"代號":"4755","名稱":"三福化","貝氏評分":4.4,"分類":"dark_horse","現價":139.0,"漲幅":"+0.0"},{"代號":"6164","名稱":"華興","貝氏評分":4.37,"分類":"dark_horse","現價":12.3,"漲幅":"-1.2"},{"代號":"2528","名稱":"皇普","貝氏評分":4.27,"分類":"dark_horse","現價":22.3,"漲幅":"+0.2"},{"代號":"6156","名稱":"松上","貝氏評分":4.27,"分類":"dark_horse","現價":19.65,"漲幅":"+1.0"},{"代號":"2504","名稱":"國產","貝氏評分":3.94,"分類":"dark_horse","現價":34.8,"漲幅":"+0.1"},{"代號":"6188","名稱":"廣明","貝氏評分":3.94,"分類":"dark_horse","現價":84.8,"漲幅":"+1.3"}]
+;
+
+const CAT_LABELS = {
+  'long_term':'長線','intraday_dip':'當沖回補','reversal':'反轉',
+  'pullback':'回調','dark_horse':'黑馬','explosive':'爆發'
+};
+const CAT_COLORS = {
+  'long_term':'#3b9eff','intraday_dip':'#a78bfa','reversal':'#f5c842',
+  'pullback':'#00d97e','dark_horse':'#ff9f40','explosive':'#ff4d6d'
+};
+
+// App state
+let currentCat = 'all';
+let sortCol = '貝氏評分', sortDir = -1;
+let manualSelected = new Set();
+let ledger = {}; // 按日期分組的帳務本 { '2026-05-11': [...], '2026-05-12': [...] }
+let currentLedgerDate = '2026-05-11'; // 當前查看的帳務本日期
+let livePrices = {};
+let gasUrl = '';
+let appCharts = {};
+let pickerSelection = new Set();
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  const now = new Date();
+  document.getElementById('dateBadge').textContent = now.toLocaleDateString('zh-TW') + ' 資料';
+  document.getElementById('addDate').value = now.toISOString().split('T')[0];
+  document.getElementById('currentLedgerDate').value = currentLedgerDate;
+
+  const storedUrl = localStorage.getItem('gasUrl') || '';
+  if (storedUrl) {
+    gasUrl = storedUrl;
+    document.getElementById('gasUrl').value = gasUrl;
+  }
+
+  STOCKS_RAW.forEach(s => { livePrices[s['代號']] = s['現價']; });
+  buildCatTabs();
+  buildCatFilters();
+  updateSaveLedgerSelect();
+  renderPerf();
+  renderGASCode();
+
+  if (window.location.protocol === 'file:') {
+    showToast('請使用本地HTTP伺服器開啟此頁面，避免GAS CORS連線問題', 'fail');
+  }
+
+  // 從GAS載入帳本數據
+  if(gasUrl) {
+    try {
+      await loadLedgerFromGAS();
+      await loadStocksFromGAS();
+    } catch(e) {
+      console.warn('無法從GAS載入數據:', e);
+      showToast('無法從GAS載入數據，將使用內建數據', 'fail');
+    }
+  }
+});
+
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(id === 'chart') setTimeout(renderCharts, 60);
+  if(id === 'ledger') {
+    // 每次進入帳本頁面都從GAS重新載入數據
+    if(gasUrl) {
+      loadLedgerFromGAS();
+    } else {
+      renderLedger();
+      showToast('未設定GAS URL，無法載入帳本數據', 'fail');
+    }
+  }
+}
+
+// ============================================================
+// CAT TABS
+// ============================================================
+function buildCatTabs() {
+  const cats = ['all', ...Object.keys(CAT_LABELS)];
+  document.getElementById('catTabs').innerHTML = cats.map(c => {
+    const count = c === 'all' ? STOCKS_RAW.length : STOCKS_RAW.filter(s => s['分類'] === c).length;
+    const label = c === 'all' ? '全部' : CAT_LABELS[c];
+    const color = c !== 'all' ? `style="--cc:${CAT_COLORS[c]}"` : '';
+    return `<button class="cat-tab ${c===currentCat?'active':''}" onclick="selectCat('${c}')">${label} <span style="color:var(--text3);font-size:10px;">${count}</span></button>`;
+  }).join('');
+}
+
+function selectCat(c) {
+  currentCat = c;
+  document.querySelectorAll('.cat-tab').forEach((b, i) => {
+    const cats = ['all', ...Object.keys(CAT_LABELS)];
+    b.classList.toggle('active', cats[i] === c);
+  });
+  renderPerf();
+}
+
+function buildCatFilters() {
+  const opts = Object.entries(CAT_LABELS).map(([k,v]) => `<option value="${k}">${v}</option>`).join('');
+  ['ledgerCatFilter','chartCat','pickerCatFilter'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.insertAdjacentHTML('beforeend', opts);
+  });
+}
+
+// ============================================================
+// PERF TABLE
+// ============================================================
+function getFilteredStocks() {
+  let data = STOCKS_RAW;
+  if(currentCat !== 'all') data = data.filter(s => s['分類'] === currentCat);
+  const q = (document.getElementById('searchInput').value || '').toLowerCase();
+  if(q) data = data.filter(s => s['代號'].includes(q) || s['名稱'].toLowerCase().includes(q));
+  const mode = document.getElementById('modeSelect').value;
+  if(mode === 'top20') {
+    data = [...data].sort((a,b) => b['貝氏評分'] - a['貝氏評分']).slice(0, 20);
+  } else if(mode === 'manual') {
+    data = data.filter(s => manualSelected.has(s['代號']));
+  }
+  return data;
+}
+
+function calcShares(price) {
+  if(!price || price <= 0) return 0;
+  return Math.floor(1000 / price);
+}
+
+function sortBy(col) {
+  if(sortCol === col) sortDir *= -1; else { sortCol = col; sortDir = -1; }
+  renderPerf();
+}
+
+function enrichStock(s) {
+  const price = livePrices[s['代號']] || s['現價'];
+  const shares = calcShares(s['現價']);
+  const invested = shares * s['現價'];
+  const curVal = shares * price;
+  const pnl = curVal - invested;
+  const pct = invested > 0 ? pnl / invested * 100 : 0;
+  return { ...s, _live: price, _shares: shares, _pnl: pnl, _pct: pct, _invested: invested };
+}
+
+function renderPerf() {
+  let data = getFilteredStocks().map(enrichStock);
+  const colMap = { 'pnl': '_pnl', 'pct': '_pct', '現價': '_live' };
+  const sc = colMap[sortCol] || sortCol;
+  data.sort((a, b) => {
+    let av = a[sc], bv = b[sc];
+    if(typeof av === 'string') av = av.toLowerCase();
+    if(typeof bv === 'string') bv = bv.toLowerCase();
+    if(av == null) av = -Infinity; if(bv == null) bv = -Infinity;
+    return sortDir * (av > bv ? 1 : av < bv ? -1 : 0);
+  });
+  document.getElementById('countBadge').textContent = data.length + ' 檔';
+
+  document.getElementById('perfBody').innerHTML = data.map(s => {
+    const chg = parseFloat(s['漲幅']) || null;
+    const chgCls = chg === null ? 'neu' : chg > 0 ? 'pos' : chg < 0 ? 'neg' : 'neu';
+    const chgStr = chg === null ? '--' : (chg > 0 ? '+' : '') + chg + '%';
+    const pnlCls = s._pnl > 0 ? 'pos' : s._pnl < 0 ? 'neg' : 'neu';
+    const cc = CAT_COLORS[s['分類']] || '#888';
+    const cl = CAT_LABELS[s['分類']] || s['分類'];
+    const pnlStr = s._shares > 0 ? (s._pnl >= 0 ? '+' : '') + s._pnl.toFixed(0) : '--';
+    const pctStr = s._shares > 0 ? (s._pct >= 0 ? '+' : '') + s._pct.toFixed(1) + '%' : '--';
+    return `<tr>
+      <td class="code">${s['代號']}</td>
+      <td class="name">${s['名稱']}</td>
+      <td><span class="cat-tag" style="background:${cc}22;color:${cc}">${cl}</span></td>
+      <td class="score" style="color:var(--gold)">${s['貝氏評分'].toFixed(2)}</td>
+      <td class="price-cell">${s['現價'].toFixed(2)}</td>
+      <td class="change-cell ${chgCls}">${chgStr}</td>
+      <td class="price-cell">${s._shares > 0 ? s._shares + ' 股' : '--'}</td>
+      <td class="pnl-cell ${pnlCls}">${pnlStr}</td>
+      <td class="pct-cell ${pnlCls}">${pctStr}</td>
+      <td><button class="btn ghost" style="padding:3px 9px;font-size:11px;" onclick="addOneLedger('${s['代號']}','${s['名稱']}','${s['分類']}',${s['現價']},${s['貝氏評分']})">＋帳本</button></td>
+    </tr>`;
+  }).join('');
+
+  renderSummaryCards(data);
+}
+
+function renderSummaryCards(data) {
+  if(!data) data = getFilteredStocks().map(enrichStock);
+  const posCount = data.filter(s => s._pnl > 0).length;
+  const negCount = data.filter(s => s._pnl < 0).length;
+  const totalPnl = data.reduce((a, s) => a + (s._pnl || 0), 0);
+  const avgScore = data.length ? (data.reduce((a, s) => a + s['貝氏評分'], 0) / data.length).toFixed(2) : '--';
+  const pnlCls = totalPnl >= 0 ? 'pos' : 'neg';
+  const pnlStr = (totalPnl >= 0 ? '+' : '') + totalPnl.toFixed(0);
+  document.getElementById('summaryCards').innerHTML = `
+    <div class="stat-card"><div class="label">篩選檔數</div><div class="value neu">${data.length}</div></div>
+    <div class="stat-card"><div class="label">上漲</div><div class="value pos">${posCount}</div></div>
+    <div class="stat-card"><div class="label">下跌</div><div class="value neg">${negCount}</div></div>
+    <div class="stat-card"><div class="label">預估總損益</div><div class="value ${pnlCls}">${pnlStr}</div><div class="sub">NTD (各1000元)</div></div>
+    <div class="stat-card"><div class="label">平均貝氏評分</div><div class="value" style="color:var(--gold)">${avgScore}</div></div>
+  `;
+}
+
+// ============================================================
+// LEDGER
+// ============================================================
+function addOneLedger(code, name, cat, price, score) {
+  const selectedLedger = document.getElementById('saveLedgerSelect').value;
+  const today = new Date().toISOString().split('T')[0];
+  const shares = calcShares(price);
+  if(shares === 0) { showToast('價格過高，1000元買不到1股', 'fail'); return; }
+  if(!ledger[selectedLedger]) ledger[selectedLedger] = [];
+  if(ledger[selectedLedger].find(r => r.code === code && r.date === today)) { showToast(name + ' 今日已在帳本中', 'fail'); return; }
+  ledger[selectedLedger].push({ date: today, code, name, cat, buyPrice: price, shares, score });
+  showToast('已加入 ' + name + ' 到' + selectedLedger + '帳本', 'ok');
+}
+
+async function saveTodayToGAS() {
+  const selectedLedger = document.getElementById('saveLedgerSelect').value;
+  const data = getFilteredStocks();
+  const today = new Date().toISOString().split('T')[0];
+  let added = 0;
+  if(!ledger[selectedLedger]) ledger[selectedLedger] = [];
+  data.forEach(s => {
+    const shares = calcShares(s['現價']);
+    if(shares > 0 && !ledger[selectedLedger].find(r => r.code === s['代號'] && r.date === today)) {
+      ledger[selectedLedger].push({ date: today, code: s['代號'], name: s['名稱'], cat: s['分類'], buyPrice: s['現價'], shares, score: s['貝氏評分'] });
+      added++;
+    }
+  });
+  showToast('已加入 ' + added + ' 檔到' + selectedLedger + '帳本', 'ok');
+
+  if(gasUrl) {
+    showLoading('儲存到GAS...');
+    try {
+      await pushLedgerToGAS();
+      await saveTodayPricesToGAS(data, today);
+      hideLoading();
+      showToast('已同步到GAS', 'ok');
+    } catch(e) {
+      hideLoading();
+      showToast('GAS同步失敗: ' + e.message + '。資料已儲存在本地。', 'fail');
+    }
+  } else {
+    showToast('未設定GAS URL，資料僅儲存在本地', 'fail');
+  }
+}
+
+function renderLedger() {
+  // 更新 currentLedgerDate select
+  const ledgerDates = Object.keys(ledger).sort();
+  const currentSelect = document.getElementById('currentLedgerDate');
+  const currentValue = currentSelect.value;
+  currentSelect.innerHTML = ledgerDates.map(date => {
+    const d = new Date(date);
+    const formatted = d.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' }) + '帳務本';
+    return `<option value="${date}">${formatted}</option>`;
+  }).join('');
+  if (ledgerDates.includes(currentValue)) {
+    currentSelect.value = currentValue;
+  } else if (ledgerDates.length > 0) {
+    currentSelect.value = ledgerDates[0];
+    currentLedgerDate = ledgerDates[0];
+  }
+
+  const dateF = document.getElementById('ledgerDateFilter').value;
+  const catF = document.getElementById('ledgerCatFilter').value;
+  const q = (document.getElementById('ledgerSearch').value || '').toLowerCase();
+  const minPrice = parseFloat(document.getElementById('ledgerMinPrice').value) || 0;
+  const maxPrice = parseFloat(document.getElementById('ledgerMaxPrice').value) || Infinity;
+  const pnlF = document.getElementById('ledgerPnlFilter').value;
+
+  // 收集所有日期
+  const allDates = new Set();
+  Object.values(ledger).forEach(arr => arr.forEach(r => allDates.add(r.date)));
+  const dates = Array.from(allDates).sort().reverse();
+  const selDate = document.getElementById('ledgerDateFilter').value;
+  document.getElementById('ledgerDateFilter').innerHTML = '<option value="">全部日期</option>' +
+    dates.map(d => `<option value="${d}" ${d === selDate ? 'selected' : ''}>${d}</option>`).join('');
+
+  // 合併所有帳務本數據
+  let data = [];
+  Object.keys(ledger).forEach(dateKey => {
+    ledger[dateKey].forEach((r, idx) => data.push({ ...r, ledgerDate: dateKey, ledgerIdx: idx }));
+  });
+
+  if(dateF) data = data.filter(r => r.date === dateF);
+  if(catF) data = data.filter(r => r.cat === catF);
+  if(q) data = data.filter(r => r.code.includes(q) || r.name.toLowerCase().includes(q));
+  if(minPrice > 0) data = data.filter(r => r.buyPrice >= minPrice);
+  if(maxPrice < Infinity) data = data.filter(r => r.buyPrice <= maxPrice);
+
+  // 應用損益篩選
+  if(pnlF) {
+    data = data.filter(r => {
+      const lp = livePrices[r.code] || r.buyPrice;
+      const pnlPct = r.buyPrice > 0 ? (lp - r.buyPrice) / r.buyPrice * 100 : 0;
+      switch(pnlF) {
+        case 'profit': return pnlPct > 0;
+        case 'loss': return pnlPct < 0;
+        case 'small': return Math.abs(pnlPct) <= 5;
+        default: return true;
+      }
+    });
+  }
+
+  document.getElementById('ledgerEmpty').style.display = data.length ? 'none' : 'block';
+  document.getElementById('ledgerTable').style.display = data.length ? 'table' : 'none';
+
+  document.getElementById('ledgerBody').innerHTML = data.map(r => {
+    const lp = livePrices[r.code] || r.buyPrice;
+    const invested = r.shares * r.buyPrice;
+    const curVal = r.shares * lp;
+    const pnl = curVal - invested;
+    const pct = invested > 0 ? pnl / invested * 100 : 0;
+    const pnlCls = pnl >= 0 ? 'pos' : 'neg';
+    const cc = CAT_COLORS[r.cat] || '#888';
+    const cl = CAT_LABELS[r.cat] || r.cat;
+    return `<tr>
+      <td class="code" style="font-size:11px;">${r.date}<br><small style="color:var(--text3);">${r.ledgerDate}</small></td>
+      <td class="code">${r.code}</td>
+      <td class="name">${r.name}</td>
+      <td><span class="cat-tag" style="background:${cc}22;color:${cc}">${cl}</span></td>
+      <td class="price-cell">${r.buyPrice.toFixed(2)}</td>
+      <td class="price-cell">${r.shares}</td>
+      <td class="price-cell">${invested.toFixed(0)}</td>
+      <td class="price-cell">${lp.toFixed(2)}</td>
+      <td class="price-cell">${curVal.toFixed(0)}</td>
+      <td class="pnl-cell ${pnlCls}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(0)}</td>
+      <td class="pct-cell ${pnlCls}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</td>
+      <td><button class="btn red" style="padding:3px 8px;font-size:11px;" onclick="deleteLedger('${r.ledgerDate}', ${r.ledgerIdx})">刪除</button></td>
+    </tr>`;
+  }).join('');
+
+  const ti = data.reduce((a, r) => a + r.shares * r.buyPrice, 0);
+  const tv = data.reduce((a, r) => a + r.shares * (livePrices[r.code] || r.buyPrice), 0);
+  const tp = tv - ti;
+  const tpct = ti > 0 ? tp / ti * 100 : 0;
+  const pc = tp >= 0 ? 'pos' : 'neg';
+  document.getElementById('ledgerSummary').innerHTML = `
+    <div class="stat-card"><div class="label">帳務筆數</div><div class="value neu">${data.length}</div></div>
+    <div class="stat-card"><div class="label">總投入</div><div class="value neu">${ti.toFixed(0)}</div><div class="sub">NTD</div></div>
+    <div class="stat-card"><div class="label">總市值</div><div class="value neu">${tv.toFixed(0)}</div><div class="sub">NTD</div></div>
+    <div class="stat-card"><div class="label">總損益</div><div class="value ${pc}">${tp >= 0 ? '+' : ''}${tp.toFixed(0)}</div><div class="sub">NTD</div></div>
+    <div class="stat-card"><div class="label">損益率</div><div class="value ${pc}">${tpct >= 0 ? '+' : ''}${tpct.toFixed(2)}%</div></div>
+  `;
+}
+
+function deleteLedger(ledgerDate, idx) {
+  const r = ledger[ledgerDate][idx];
+  if(!confirm('確定刪除 ' + r.name + ' (' + r.date + ')?')) return;
+  ledger[ledgerDate].splice(idx, 1);
+  renderLedger();
+  if(gasUrl) pushLedgerToGAS();
+  showToast('已刪除', 'ok');
+}
+
+function changeCurrentLedgerDate(date) {
+  currentLedgerDate = date;
+  document.getElementById('currentLedgerDate').value = date;
+  renderLedger();
+}
+
+function updateSaveLedgerSelect() {
+  const select = document.getElementById('saveLedgerSelect');
+  const currentValue = select.value;
+  const ledgerDates = Object.keys(ledger).sort();
+  // 確保至少有今天的日期
+  const today = new Date().toISOString().split('T')[0];
+  if (!ledgerDates.includes(today)) ledgerDates.push(today);
+  ledgerDates.sort();
+  
+  select.innerHTML = ledgerDates.map(date => {
+    const d = new Date(date);
+    const formatted = d.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' }) + '帳本';
+    return `<option value="${date}">${formatted}</option>`;
+  }).join('');
+  
+  // 恢復選擇的值，如果還存在的話
+  if (ledgerDates.includes(currentValue)) {
+    select.value = currentValue;
+  } else {
+    select.value = today; // 預設為今天
+  }
+}
+
+function openAddManual() { document.getElementById('addModal').classList.add('open'); }
+
+function submitManualAdd() {
+  const date = document.getElementById('addDate').value;
+  const code = document.getElementById('addCode').value.trim();
+  const name = document.getElementById('addName').value.trim();
+  const cat = document.getElementById('addCat').value;
+  const price = parseFloat(document.getElementById('addPrice').value);
+  const score = parseFloat(document.getElementById('addScore').value) || 0;
+  if(!date || !code || !name || !price) { showToast('請填寫所有必填欄位', 'fail'); return; }
+  const shares = calcShares(price);
+  if(!ledger[currentLedgerDate]) ledger[currentLedgerDate] = [];
+  ledger[currentLedgerDate].push({ date, code, name, cat, buyPrice: price, shares, score });
+  document.getElementById('addModal').classList.remove('open');
+  renderLedger();
+  if(gasUrl) pushLedgerToGAS();
+  showToast('已新增 ' + name + ' 到' + currentLedgerDate + '帳本', 'ok');
+}
+
+function openAddLedgerModal() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('newLedgerDate').value = today;
+  document.getElementById('addLedgerModal').classList.add('open');
+}
+
+function submitAddLedger() {
+  const newDate = document.getElementById('newLedgerDate').value;
+  if(!newDate) { showToast('請選擇帳本日期', 'fail'); return; }
+  
+  if(ledger[newDate]) {
+    showToast('此日期的帳本已存在', 'fail');
+    return;
+  }
+  
+  ledger[newDate] = [];
+  updateSaveLedgerSelect();
+  document.getElementById('saveLedgerSelect').value = newDate;
+  document.getElementById('addLedgerModal').classList.remove('open');
+  showToast('已新增 ' + newDate + ' 帳本', 'ok');
+}
+
+// ============================================================
+// LIVE PRICE (TWSE)
+// ============================================================
+async function fetchLivePrices() {
+  showLoading('更新現價中...');
+  const visible = getFilteredStocks().slice(0, 30);
+  let updated = 0;
+  for(const s of visible) {
+    try {
+      const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=tse_${s['代號']}.tw`;
+      const r = await fetch(url);
+      const d = await r.json();
+      if(d.msgArray && d.msgArray[0]) {
+        const z = d.msgArray[0].z;
+        if(z && z !== '-') { livePrices[s['代號']] = parseFloat(z); updated++; }
+      }
+    } catch(e) { /* ignore */ }
+    await new Promise(r => setTimeout(r, 120));
+  }
+  hideLoading();
+  showToast('已更新 ' + updated + ' 檔現價', updated > 0 ? 'ok' : 'fail');
+  renderPerf();
+  renderLedger();
+}
+
+// ============================================================
+// PICKER
+// ============================================================
+function openPicker() {
+  pickerSelection = new Set(manualSelected);
+  filterPicker();
+  document.getElementById('pickerModal').classList.add('open');
+}
+function closePicker() { document.getElementById('pickerModal').classList.remove('open'); }
+function applyPicker() {
+  manualSelected = new Set(pickerSelection);
+  document.getElementById('modeSelect').value = 'manual';
+  closePicker();
+  renderPerf();
+}
+function filterPicker() {
+  const q = (document.getElementById('pickerSearch').value || '').toLowerCase();
+  const cat = document.getElementById('pickerCatFilter').value;
+  const avail = STOCKS_RAW.filter(s => {
+    if(pickerSelection.has(s['代號'])) return false;
+    if(cat && s['分類'] !== cat) return false;
+    if(q && !s['代號'].includes(q) && !s['名稱'].toLowerCase().includes(q)) return false;
+    return true;
+  });
+  document.getElementById('pickerAvailCount').textContent = '(' + avail.length + ')';
+  document.getElementById('pickerAvail').innerHTML = avail.slice(0, 150).map(s =>
+    `<div class="picker-item" onclick="pickerAdd('${s['代號']}')">
+      <span class="code-sm">${s['代號']}</span> ${s['名稱']}
+      <span style="margin-left:auto;font-size:10px;color:${CAT_COLORS[s['分類']]}">${CAT_LABELS[s['分類']] || ''}</span>
+    </div>`).join('');
+  const selArr = STOCKS_RAW.filter(s => pickerSelection.has(s['代號']));
+  document.getElementById('pickerSelCount').textContent = '(' + selArr.length + ')';
+  document.getElementById('pickerSel').innerHTML = selArr.map(s =>
+    `<div class="picker-item selected" onclick="pickerRemove('${s['代號']}')">
+      <span class="code-sm">${s['代號']}</span> ${s['名稱']}
+      <span style="margin-left:auto;font-size:10px;color:var(--red)">✕</span>
+    </div>`).join('');
+}
+function pickerAdd(c) { pickerSelection.add(c); filterPicker(); }
+function pickerRemove(c) { pickerSelection.delete(c); filterPicker(); }
+function selectAllPicker() {
+  const avail = STOCKS_RAW.filter(s => {
+    if(pickerSelection.has(s['代號'])) return false;
+    const cat = document.getElementById('pickerCatFilter').value;
+    if(cat && s['分類'] !== cat) return false;
+    const q = (document.getElementById('pickerSearch').value || '').toLowerCase();
+    if(q && !s['代號'].includes(q) && !s['名稱'].toLowerCase().includes(q)) return false;
+    return true;
+  });
+  avail.forEach(s => pickerSelection.add(s['代號']));
+  filterPicker();
+}
+function clearAllPicker() {
+  pickerSelection.clear();
+  filterPicker();
+}
+
+// ============================================================
+// CHARTS
+// ============================================================
+function renderCharts() {
+  const cf = document.getElementById('chartCat').value;
+  let data = (cf && cf !== 'all') ? STOCKS_RAW.filter(s => s['分類'] === cf) : STOCKS_RAW;
+
+  Object.values(appCharts).forEach(c => { try { c.destroy(); } catch(e) {} });
+  appCharts = {};
+
+  const catCounts = {};
+  data.forEach(s => { catCounts[s['分類']] = (catCounts[s['分類']] || 0) + 1; });
+  const catKeys = Object.keys(catCounts);
+
+  appCharts.pie = new Chart(document.getElementById('catPieChart'), {
+    type: 'doughnut',
+    data: {
+      labels: catKeys.map(k => CAT_LABELS[k] || k),
+      datasets: [{ data: catKeys.map(k => catCounts[k]),
+        backgroundColor: catKeys.map(k => CAT_COLORS[k] || '#666'),
+        borderWidth: 2, borderColor: '#111418' }]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { color: '#8a9ab0', font: { size: 11 } } } } }
+  });
+
+  // 合併所有帳務本數據用於圖表
+  const allLedger = [];
+  Object.values(ledger).forEach(arr => allLedger.push(...arr));
+
+  const pnlPcts = allLedger.map(r => {
+    const lp = livePrices[r.code] || r.buyPrice;
+    return r.buyPrice > 0 ? (lp - r.buyPrice) / r.buyPrice * 100 : 0;
+  });
+  const bins = [-20, -10, -5, -2, 0, 2, 5, 10, 20, Infinity];
+  const bLabels = ['<-20%', '-20~-10%', '-10~-5%', '-5~-2%', '-2~0%', '0~2%', '2~5%', '5~10%', '10~20%', '>20%'];
+  const bCounts = new Array(bins.length).fill(0);
+  pnlPcts.forEach(p => { for(let i = 0; i < bins.length; i++) { if(p < bins[i]) { bCounts[i]++; break; } } });
+  appCharts.pnlDist = new Chart(document.getElementById('pnlDistChart'), {
+    type: 'bar',
+    data: { labels: bLabels, datasets: [{ data: bCounts,
+      backgroundColor: bLabels.map((_, i) => i < 5 ? 'rgba(255,77,109,0.6)' : 'rgba(0,217,126,0.6)'),
+      borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: '#8a9ab0', font: { size: 9 } }, grid: { color: '#1e252f' } },
+                 y: { ticks: { color: '#8a9ab0' }, grid: { color: '#1e252f' } } } }
+  });
+
+  const catPnls = {};
+  allLedger.forEach(r => {
+    const lp = livePrices[r.code] || r.buyPrice;
+    const pnl = r.shares * (lp - r.buyPrice);
+    catPnls[r.cat] = (catPnls[r.cat] || 0) + pnl;
+  });
+  const pnlCatKeys = Object.keys(catPnls);
+
+  appCharts.score = new Chart(document.getElementById('scoreBarChart'), {
+    type: 'bar',
+    data: { labels: pnlCatKeys.map(k => CAT_LABELS[k] || k),
+      datasets: [{ label: '總損益 (NTD)', data: pnlCatKeys.map(k => catPnls[k]),
+        backgroundColor: pnlCatKeys.map(k => (catPnls[k] >= 0 ? 'rgba(0,217,126,0.8)' : 'rgba(255,77,109,0.8)')),
+        borderColor: pnlCatKeys.map(k => (catPnls[k] >= 0 ? '#00d97e' : '#ff4d6d')),
+        borderWidth: 1, borderRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: '#8a9ab0' }, grid: { color: '#1e252f' } },
+                 y: { ticks: { color: '#8a9ab0', callback: v => v.toLocaleString() + '元' }, grid: { color: '#1e252f' } } } }
+  });
+
+  const ledDisplay = allLedger.slice(-50);
+  appCharts.ledBar = new Chart(document.getElementById('ledgerBarChart'), {
+    type: 'bar',
+    data: {
+      labels: ledDisplay.map(r => r.name),
+      datasets: [{ label: '損益 (NTD)', data: ledDisplay.map(r => {
+          const lp = livePrices[r.code] || r.buyPrice;
+          return r.shares * (lp - r.buyPrice);
+        }),
+        backgroundColor: ledDisplay.map(r => {
+          const lp = livePrices[r.code] || r.buyPrice;
+          const pnl = r.shares * (lp - r.buyPrice);
+          return pnl >= 0 ? 'rgba(0,217,126,0.65)' : 'rgba(255,77,109,0.65)';
+        }), borderRadius: 4 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: '#8a9ab0', font: { size: 10 }, maxRotation: 45 }, grid: { color: '#1e252f' } },
+                 y: { ticks: { color: '#8a9ab0', callback: v => v.toLocaleString() + '元' }, grid: { color: '#1e252f' } } } }
+  });
+}
+
+// ============================================================
+// GAS
+// ============================================================
+function saveGASUrl() {
+  gasUrl = document.getElementById('gasUrl').value.trim();
+  if (!gasUrl) {
+    showToast('GAS URL 不能為空', 'fail');
+    return;
+  }
+  localStorage.setItem('gasUrl', gasUrl);
+  showToast('GAS URL 已儲存（localStorage）', 'ok');
+  document.getElementById('gasStatus').className = 'status-dot';
+}
+
+function clearCache() {
+  if (!confirm('確定要清除績效快取嗎？這將刪除帳務本與手動選取的績效資料，但會保留 GAS URL。')) return;
+  ledger = {};
+  manualSelected = new Set();
+  renderPerf();
+  renderLedger();
+  showToast('績效快取已清除', 'ok');
+}
+
+async function testGAS() {
+  gasUrl = document.getElementById('gasUrl').value.trim();
+  if(!gasUrl) { showToast('請先輸入 GAS URL', 'fail'); return; }
+
+  // 檢查URL格式
+  if(!gasUrl.includes('script.google.com/macros/s/')) {
+    showToast('GAS URL 格式不正確，應包含 script.google.com/macros/s/', 'fail');
+    return;
+  }
+
+  showLoading('測試連線...');
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超時
+
+    const r = await fetch(gasUrl + '?action=ping', {
+      method: 'GET',
+      mode: 'cors',
+      cache: 'no-cache',
+      credentials: 'omit',
+      headers: {
+        'Accept': 'application/json',
+      },
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    const text = await r.text();
+    if(!r.ok) {
+      throw new Error(`HTTP ${r.status}: ${r.statusText} - ${text}`);
+    }
+
+    let d;
+    try {
+      d = JSON.parse(text);
+    } catch(jsonErr) {
+      throw new Error(`非JSON回應: ${text}`);
+    }
+
+    hideLoading();
+    if(d.status === 'ok') {
+      document.getElementById('gasStatus').className = 'status-dot ok';
+      showToast('GAS 連線成功！', 'ok');
+    } else {
+      document.getElementById('gasStatus').className = 'status-dot err';
+      showToast('GAS 回應異常: ' + (d.error || JSON.stringify(d)), 'fail');
+    }
+  } catch(e) {
+    hideLoading();
+    document.getElementById('gasStatus').className = 'status-dot err';
+    console.error('GAS測試失敗:', e);
+
+    if(e.name === 'AbortError') {
+      showToast('連線超時，請檢查網路或GAS部署設定', 'fail');
+    } else if(e.message.includes('CORS')) {
+      showToast('CORS錯誤：請確保GAS部署設定正確（執行身分：我，存取權：任何人）', 'fail');
+    } else if(e.message.includes('Failed to fetch')) {
+      showToast('網路錯誤：請檢查URL是否正確，或網路連線是否正常', 'fail');
+    } else {
+      showToast('連線失敗: ' + e.message, 'fail');
+    }
+  }
+}
+
+async function syncToGAS() {
+  if(!gasUrl) { showToast('請先在設定頁設定 GAS URL', 'fail'); return; }
+  showLoading('同步到GAS...');
+  try {
+    await pushLedgerToGAS();
+    hideLoading(); showToast('同步成功！', 'ok');
+  } catch(e) { hideLoading(); showToast('同步失敗: ' + e.message, 'fail'); }
+}
+
+async function pushLedgerToGAS() {
+  if(!gasUrl) return;
+  try {
+    // 將分組的ledger扁平化為數組發送到GAS
+    const flatLedger = [];
+    Object.keys(ledger).forEach(dateKey => {
+      ledger[dateKey].forEach(r => flatLedger.push({ ...r, ledgerDate: dateKey }));
+    });
+    const r = await fetch(gasUrl, {
+      method: 'POST',
+      mode: 'cors',
+      cache: 'no-cache',
+      credentials: 'omit',
+      body: JSON.stringify({ action: 'saveLedger', data: flatLedger })
+    });
+    if(!r.ok) {
+      throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+    }
+    const d = await r.json();
+    if(d.error) {
+      throw new Error(d.error);
+    }
+    return d;
+  } catch(e) {
+    console.error('GAS同步失敗:', e);
+    throw e;
+  }
+}
+
+async function saveTodayPricesToGAS(stocks, date) {
+  if(!gasUrl) return;
+  try {
+    const priceData = stocks.map(s => ({
+      date, code: s['代號'], name: s['名稱'], cat: s['分類'],
+      price: livePrices[s['代號']] || s['現價'], score: s['貝氏評分']
+    }));
+    const r = await fetch(gasUrl, {
+      method: 'POST',
+      mode: 'cors',
+      cache: 'no-cache',
+      credentials: 'omit',
+      body: JSON.stringify({ action: 'savePrices', data: priceData, date })
+    });
+    if(!r.ok) {
+      throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+    }
+    const d = await r.json();
+    if(d.error) {
+      throw new Error(d.error);
+    }
+    return d;
+  } catch(e) {
+    console.error('GAS價格同步失敗:', e);
+    throw e;
+  }
+}
+
+async function loadStocksFromGAS() {
+  if(!gasUrl) { showToast('請先設定 GAS URL', 'fail'); return; }
+  showLoading('從GAS載入股票數據...');
+  try {
+    const r = await fetch(gasUrl + '?action=getStocks', {
+      method: 'GET',
+      mode: 'cors',
+      cache: 'no-cache',
+      credentials: 'omit',
+      headers: {
+        'Accept': 'application/json',
+      }
+    });
+    if(!r.ok) {
+      throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+    }
+    const d = await r.json();
+    if(d.error) {
+      throw new Error(d.error);
+    }
+    if(d.data && d.data.length > 0) {
+      // 更新STOCKS_RAW 內容，不重新賦值 const
+      STOCKS_RAW.length = 0;
+      d.data.forEach(item => STOCKS_RAW.push(item));
+      STOCKS_RAW.forEach(s => { livePrices[s['代號']] = s['現價']; });
+      buildCatTabs();
+      renderPerf();
+      showToast('載入 ' + STOCKS_RAW.length + ' 檔股票數據', 'ok');
+    } else {
+      showToast('GAS中沒有股票數據', 'fail');
+    }
+  } catch(e) {
+    console.error('載入GAS股票數據失敗:', e);
+    showToast('載入失敗: ' + e.message, 'fail');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function loadLedgerFromGAS() {
+  if(!gasUrl) { showToast('請先設定 GAS URL', 'fail'); return; }
+  showLoading('從GAS載入帳務本...');
+  try {
+    const r = await fetch(gasUrl + '?action=getLedger', {
+      method: 'GET',
+      mode: 'cors',
+      cache: 'no-cache',
+      credentials: 'omit',
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+    const text = await r.text();
+    if(!r.ok) {
+      throw new Error(`HTTP ${r.status}: ${r.statusText} - ${text}`);
+    }
+    let d;
+    try {
+      d = JSON.parse(text);
+    } catch(jsonErr) {
+      throw new Error(`非JSON回應: ${text}`);
+    }
+    if(d.error) {
+      throw new Error(d.error);
+    }
+    if(d.data) {
+      // 將GAS返回的扁平化數據重新分組
+      const grouped = {};
+      d.data.forEach(r => {
+        const key = r.ledgerDate || '2026-05-11'; // 默認到05/11
+        if(!grouped[key]) grouped[key] = [];
+        delete r.ledgerDate; // 移除臨時字段
+        grouped[key].push(r);
+      });
+      ledger = grouped;
+      renderLedger();
+      updateSaveLedgerSelect();
+      showToast('載入 ' + d.data.length + ' 筆帳務', 'ok');
+    } else {
+      showToast('GAS回傳數據格式錯誤', 'fail');
+    }
+  } catch(e) {
+    console.error('載入GAS帳本失敗:', e);
+    showToast('載入失敗: ' + e.message, 'fail');
+  } finally {
+    hideLoading();
+  }
+}
+
+// ============================================================
+// GAS CODE TEMPLATE
+// ============================================================
+function renderGASCode() {
+  document.getElementById('gasCode').value = `// ====== 台股績效系統 GAS 後端 ======
+// 1. 開啟 script.google.com，建立新專案
+// 2. 貼上此程式碼
+// 3. 點「部署」→「新增部署作業」→「網頁應用程式」
+//    執行身分：以我的身份執行
+//    存取權：任何人（Anyone）
+// 4. 複製部署後的 URL 貼到 HTML 設定頁
+
+const LEDGER_SHEET = '帳務本';
+const PRICES_SHEET = '每日現價';
+
+function doGet(e) {
+  const a = e.parameter.action;
+  if (a === 'ping') return json({status:'ok', time: new Date().toISOString()});
+  if (a === 'getLedger') return json({data: readLedger()});
+  if (a === 'getStocks') return json({data: readStocks()});
+  if (a === 'getPrices') return json({data: readPrices(e.parameter.date)});
+  return json({error:'unknown action'});
+}
+
+function doPost(e) {
+  try {
+    const b = JSON.parse(e.postData.contents);
+    if (b.action === 'saveLedger') { writeLedger(b.data); return json({status:'ok', count: b.data.length}); }
+    if (b.action === 'savePrices') { writePrices(b.data, b.date); return json({status:'ok'}); }
+    if (b.action === 'uploadData') { return uploadDataToSheets(b.data); }
+    if (b.action === 'updateCode') { return updateScriptCode(b.code); }
+    return json({error:'unknown action'});
+  } catch(err) {
+    return json({error: err.message, status: 'error'});
+  }
+}
+
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function uploadDataToSheets(data) {
+  try {
+    // 假設data是股票數據陣列，格式與STOCKS_RAW相同
+    const s = getSheet('股票數據', ['代號','名稱','分類','現價','漲幅','貝氏評分']);
+    s.clearContents();
+    s.appendRow(['代號','名稱','分類','現價','漲幅','貝氏評分']);
+    data.forEach(stock => {
+      s.appendRow([stock['代號'], stock['名稱'], stock['分類'], stock['現價'], stock['漲幅'], stock['貝氏評分']]);
+    });
+    return json({status:'ok', count: data.length});
+  } catch(err) {
+    return json({status:'error', error: err.message});
+  }
+}
+
+function getSheet(name, headers) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let s = ss.getSheetByName(name);
+  if (!s) { s = ss.insertSheet(name); s.appendRow(headers); s.getRange(1,1,1,headers.length).setFontWeight('bold'); }
+  return s;
+}
+
+function readLedger() {
+  const s = getSheet(LEDGER_SHEET, ['日期','代號','名稱','分類','買入價','股數','貝氏評分']);
+  const rows = s.getDataRange().getValues();
+  if (rows.length <= 1) return [];
+  return rows.slice(1).map(r => ({
+    date: fmtDate(r[0]), code: String(r[1]), name: r[2], cat: r[3],
+    buyPrice: Number(r[4]), shares: Number(r[5]), score: Number(r[6])
+  }));
+}
+
+function readStocks() {
+  const s = getSheet('股票數據', ['代號','名稱','分類','現價','漲幅','貝氏評分']);
+  const rows = s.getDataRange().getValues();
+  if (rows.length <= 1) return [];
+  return rows.slice(1).map(r => ({
+    '代號': String(r[0]), '名稱': r[1], '分類': r[2],
+    '現價': Number(r[3]), '漲幅': r[4] ? Number(r[4]) : null, '貝氏評分': Number(r[5])
+  }));
+}
+
+function writeLedger(data) {
+  const s = getSheet(LEDGER_SHEET, ['日期','代號','名稱','分類','買入價','股數','貝氏評分']);
+  s.clearContents();
+  s.appendRow(['日期','代號','名稱','分類','買入價','股數','貝氏評分']);
+  data.forEach(r => s.appendRow([r.date, r.code, r.name, r.cat, r.buyPrice, r.shares, r.score]));
+}
+
+function readPrices(date) {
+  const s = getSheet(PRICES_SHEET, ['日期','代號','名稱','分類','限價','貝氏評分']);
+  const rows = s.getDataRange().getValues();
+  if (rows.length <= 1) return [];
+  return rows.slice(1)
+    .filter(r => !date || fmtDate(r[0]) === date)
+    .map(r => ({ date: fmtDate(r[0]), code: String(r[1]), name: r[2], cat: r[3], price: Number(r[4]), score: Number(r[5]) }));
+}
+
+function writePrices(data, date) {
+  const s = getSheet(PRICES_SHEET, ['日期','代號','名稱','分類','限價','貝氏評分']);
+  const rows = s.getDataRange().getValues();
+  const toDel = [];
+  rows.forEach((r, i) => { if (i > 0 && fmtDate(r[0]) === date) toDel.push(i + 1); });
+  toDel.reverse().forEach(i => s.deleteRow(i));
+  data.forEach(r => s.appendRow([r.date, r.code, r.name, r.cat, r.price, r.score]));
+}
+
+function fmtDate(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Taipei', 'yyyy-MM-dd');
+  return String(v);
+}`;
+}
+
+function copyGASCode() {
+  navigator.clipboard.writeText(document.getElementById('gasCode').value);
+  showToast('GAS 程式碼已複製到剪貼板', 'ok');
+}
+
+function enableEditGAS() {
+  const textarea = document.getElementById('gasCode');
+  textarea.readOnly = false;
+  textarea.focus();
+  document.getElementById('updateGASBtn').style.display = 'inline-block';
+  showToast('已啟用編輯模式', 'ok');
+}
+
+async function updateGASCode() {
+  const code = document.getElementById('gasCode').value;
+  if(!code.trim()) { showToast('程式碼不能為空', 'fail'); return; }
+
+  // 複製更新後的代碼到剪貼板
+  navigator.clipboard.writeText(code);
+  showToast('更新後的GAS程式碼已複製到剪貼板！請手動貼到Apps Script編輯器中', 'ok');
+
+  // 重新載入GAS代碼模板
+  renderGASCode();
+  document.getElementById('gasCode').readOnly = true;
+  document.getElementById('updateGASBtn').style.display = 'none';
+}
+
+function normalizeHeader(value) {
+  return String(value || '').trim().replace(/\s+/g, '').toLowerCase();
+}
+
+function parseCSVRow(text) {
+  const values = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      if (inQuotes && text[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      values.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  values.push(current);
+  return values.map(v => v.replace(/^"|"$/g, '').trim());
+}
+
+function mapRowToStock(row) {
+  const normalized = {};
+  Object.keys(row).forEach(key => {
+    normalized[normalizeHeader(key)] = row[key];
+  });
+  const code = normalized['代號'] || normalized['code'] || normalized['ticker'] || normalized['stock'];
+  const name = normalized['名稱'] || normalized['name'];
+  const cat = normalized['分類'] || normalized['category'] || normalized['type'] || 'long_term';
+  const price = parseFloat(normalized['現價'] || normalized['price'] || normalized['close'] || normalized['last']) || 0;
+  const change = normalized['漲幅'] || normalized['change'] || normalized['chg'] || '';
+  const score = parseFloat(normalized['貝氏評分'] || normalized['score'] || normalized['rating']) || 0;
+  if (!code || !name) return null;
+  return {
+    '代號': String(code),
+    '名稱': String(name),
+    '分類': String(cat),
+    '現價': price,
+    '漲幅': change,
+    '貝氏評分': score
+  };
+}
+
+async function parseUploadedFile(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.json')) {
+    const text = await file.text();
+    return JSON.parse(text);
+  }
+  if (name.endsWith('.csv')) {
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+    if (!lines.length) return [];
+    const headers = parseCSVRow(lines[0]);
+    return lines.slice(1).map(line => {
+      const values = parseCSVRow(line);
+      const row = {};
+      headers.forEach((h, idx) => { row[h] = values[idx] || ''; });
+      return row;
+    });
+  }
+  if (name.endsWith('.xls') || name.endsWith('.xlsx')) {
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    return XLSX.utils.sheet_to_json(sheet, { defval: '' });
+  }
+  throw new Error('不支援的檔案格式');
+}
+
+function normalizeUploadRows(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.map(mapRowToStock).filter(r => r && r['代號'] && r['名稱']);
+}
+
+async function uploadDataFile() {
+  const fileInput = document.getElementById('dataFile');
+  const statusDiv = document.getElementById('uploadStatus');
+
+  if(!fileInput.files.length) {
+    statusDiv.textContent = '請選擇檔案';
+    statusDiv.style.color = 'var(--red)';
+    return;
+  }
+
+  if(!gasUrl) {
+    statusDiv.textContent = '請先設定GAS URL';
+    statusDiv.style.color = 'var(--red)';
+    return;
+  }
+
+  const file = fileInput.files[0];
+  statusDiv.textContent = '正在讀取檔案...';
+  statusDiv.style.color = 'var(--text2)';
+
+  try {
+    const rawRows = await parseUploadedFile(file);
+    const data = normalizeUploadRows(rawRows);
+    if (!data.length) {
+      throw new Error('解析後沒有可用資料，請確認檔案欄位是否包含代號、名稱');
+    }
+
+    statusDiv.textContent = '正在更新到試算表...';
+
+    // 發送到GAS
+    const r = await fetch(gasUrl, {
+      method: 'POST',
+      mode: 'cors',
+      cache: 'no-cache',
+      credentials: 'omit',
+      body: JSON.stringify({ action: 'uploadData', data: data })
+    });
+
+    if(!r.ok) {
+      throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+    }
+
+    const result = await r.json();
+    if(result.error) {
+      throw new Error(result.error);
+    }
+
+    statusDiv.textContent = `成功更新 ${result.count || 0} 筆資料到試算表`;
+    statusDiv.style.color = 'var(--green)';
+
+    // 重新載入帳本數據
+    await loadLedgerFromGAS();
+    showToast('資料已更新並重新載入', 'ok');
+
+  } catch(e) {
+    console.error('檔案上傳失敗:', e);
+    statusDiv.textContent = '上傳失敗: ' + e.message;
+    statusDiv.style.color = 'var(--red)';
+  }
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function showLoading(msg) {
+  document.getElementById('loadingText').textContent = msg || '載入中...';
+  document.getElementById('loadingOverlay').classList.add('show');
+}
+function hideLoading() { document.getElementById('loadingOverlay').classList.remove('show'); }
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast ' + (type || 'ok') + ' show';
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => { if(e.target === bg) bg.classList.remove('open'); });
+});
+</script>
+</body>
+</html>
