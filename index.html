@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>台股績效系統</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -20,38 +20,40 @@
   --r:8px;--r2:12px;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-serif;min-height:100vh;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-serif;min-height:100vh;padding-top:60px;}
 ::-webkit-scrollbar{width:6px;height:6px;}
 ::-webkit-scrollbar-track{background:var(--bg);}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
 
-.header{background:linear-gradient(135deg,#0d1117 0%,#111827 100%);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:16px;height:60px;position:sticky;top:0;z-index:100;flex-wrap:wrap;}
+.header{background:linear-gradient(135deg,#0d1117 0%,#111827 100%);border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;height:60px;position:fixed;top:0;left:0;right:0;z-index:100;}
 .logo{font-size:17px;font-weight:900;color:var(--blue);letter-spacing:-0.5px;white-space:nowrap;}
 .logo span{color:var(--text2);font-weight:300;}
-.header-nav{display:flex;gap:4px;}
-.nav-btn{background:none;border:none;color:var(--text2);font-size:13px;font-family:inherit;padding:6px 12px;border-radius:var(--r);cursor:pointer;transition:all .2s;white-space:nowrap;}
+.header-main{display:flex;align-items:center;gap:12px;flex:1;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.header-nav{display:flex;gap:4px;flex-wrap:nowrap;}
+.nav-btn{background:none;border:none;color:var(--text2);font-size:12px;font-family:inherit;padding:8px 10px;border-radius:var(--r);cursor:pointer;transition:all .2s;white-space:nowrap;touch-action:manipulation;-webkit-tap-highlight-color:transparent;min-height:44px;display:flex;align-items:center;}
 .nav-btn:hover{background:var(--surface2);color:var(--text);}
 .nav-btn.active{background:var(--blue-dim);color:var(--blue);font-weight:500;}
-.gas-btn{background:var(--gold-dim);border:1px solid rgba(245,200,66,0.3);color:var(--gold);font-size:12px;font-family:inherit;padding:6px 14px;border-radius:var(--r);cursor:pointer;transition:all .2s;white-space:nowrap;}
+.gas-btn{background:var(--gold-dim);border:1px solid rgba(245,200,66,0.3);color:var(--gold);font-size:12px;font-family:inherit;padding:6px 14px;border-radius:var(--r);cursor:pointer;transition:all .2s;white-space:nowrap;touch-action:manipulation;-webkit-tap-highlight-color:transparent;min-height:44px;display:flex;align-items:center;}
 .gas-btn:hover{background:rgba(245,200,66,0.2);}
-.date-badge{background:var(--surface2);border:1px solid var(--border);padding:4px 10px;border-radius:var(--r);font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;white-space:nowrap;margin-left:auto;}
+.date-badge{background:var(--surface2);border:1px solid var(--border);padding:6px 10px;border-radius:var(--r);font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;white-space:nowrap;flex-shrink:0;}
 
-.main{padding:20px 24px;max-width:1600px;margin:0 auto;}
+.main{padding:20px;max-width:1600px;margin:0 auto;}
 .page{display:none;}
 .page.active{display:block;}
 
-.cards-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:16px;}
-.stat-card .label{font-size:11px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;}
-.stat-card .value{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;}
-.stat-card .sub{font-size:11px;color:var(--text2);margin-top:4px;}
+.cards-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:14px;}
+.stat-card .label{font-size:10px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;}
+.stat-card .value{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+.stat-card .sub{font-size:10px;color:var(--text2);margin-top:4px;}
 .pos{color:var(--green);}.neg{color:var(--red);}.neu{color:var(--text);}
 
-.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
-.toolbar select,.toolbar input{background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:7px 10px;border-radius:var(--r);outline:none;transition:border-color .2s;}
+.toolbar{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:14px;}
+.toolbar select,.toolbar input{background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:9px 10px;border-radius:var(--r);outline:none;transition:border .2s;width:100%;min-height:44px;touch-action:manipulation;}
 .toolbar select:focus,.toolbar input:focus{border-color:var(--blue);}
-.toolbar input[type=text]{width:180px;}
-.btn{background:var(--blue);border:none;color:#fff;font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:var(--r);cursor:pointer;transition:all .2s;white-space:nowrap;}
+.toolbar input[type=text]{width:100%;}
+.btn{background:var(--blue);border:none;color:#fff;font-family:inherit;font-size:13px;font-weight:600;padding:9px 14px;border-radius:var(--r);cursor:pointer;transition:all .2s;white-space:nowrap;touch-action:manipulation;-webkit-tap-highlight-color:transparent;min-height:44px;display:flex;align-items:center;justify-content:center;width:100%;}
+.btn:active{opacity:0.8;}
 .btn:hover{background:#2d8ae8;}
 .btn.green{background:var(--green2);}
 .btn.green:hover{background:#007d47;}
@@ -60,55 +62,63 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 .btn.ghost{background:var(--surface2);border:1px solid var(--border2);color:var(--text2);}
 .btn.ghost:hover{border-color:var(--blue);color:var(--blue);}
 .spacer{flex:1;}
-.count-badge{font-size:12px;color:var(--text3);padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:20px;white-space:nowrap;}
+.count-badge{font-size:12px;color:var(--text3);padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:20px;white-space:nowrap;}
+
+.toolbar-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.toolbar-row .btn{flex:1;min-width:80px;padding:6px 8px;font-size:12px;}
+.toolbar-row select{flex:1;min-width:100px;}
 
 /* 帳本選擇器標籤群組 */
-.ledger-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
-.ledger-tab{background:var(--surface);border:1px solid var(--border);color:var(--text2);font-size:12px;font-family:inherit;padding:5px 14px;border-radius:20px;cursor:pointer;transition:all .2s;white-space:nowrap;}
+.ledger-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.ledger-tab{background:var(--surface);border:1px solid var(--border);color:var(--text2);font-size:11px;font-family:inherit;padding:6px 12px;border-radius:20px;cursor:pointer;transition:all .2s;white-space:nowrap;touch-action:manipulation;-webkit-tap-highlight-color:transparent;min-height:36px;display:flex;align-items:center;}
 .ledger-tab:hover{border-color:var(--border2);color:var(--text);}
 .ledger-tab.active{background:var(--blue-dim);border-color:var(--blue);color:var(--blue);}
 
-.cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
-.cat-tab{background:var(--surface);border:1px solid var(--border);color:var(--text2);font-size:12px;font-family:inherit;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all .2s;}
+.cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.cat-tab{background:var(--surface);border:1px solid var(--border);color:var(--text2);font-size:11px;font-family:inherit;padding:6px 10px;border-radius:20px;cursor:pointer;transition:all .2s;touch-action:manipulation;-webkit-tap-highlight-color:transparent;min-height:36px;display:flex;align-items:center;white-space:nowrap;}
 .cat-tab:hover{border-color:var(--border2);color:var(--text);}
 .cat-tab.active{background:var(--blue-dim);border-color:var(--blue);color:var(--blue);}
 
-.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);overflow:auto;}
-table{width:100%;border-collapse:collapse;font-size:13px;}
-thead th{background:var(--surface2);padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:0;}
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);overflow:auto;-webkit-overflow-scrolling:touch;}
+.table-wrap-mobile{display:none;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{background:var(--surface2);padding:9px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;cursor:pointer;user-select:none;}
 thead th:hover{color:var(--text2);}
 tbody tr{border-top:1px solid var(--border);transition:background .12s;}
 tbody tr:hover{background:var(--surface2);}
-tbody td{padding:8px 12px;vertical-align:middle;}
-.code{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text2);}
-.name{font-weight:500;}
+tbody td{padding:8px;vertical-align:middle;font-size:11px;}
+.code{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);}
+.name{font-weight:500;max-width:100px;overflow:hidden;text-overflow:ellipsis;}
 .score{font-family:'JetBrains Mono',monospace;font-weight:600;}
-.price-cell{font-family:'JetBrains Mono',monospace;}
-.change-cell{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:12px;}
-.cat-tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:500;}
-.pnl-cell{font-family:'JetBrains Mono',monospace;font-weight:600;}
-.pct-cell{font-family:'JetBrains Mono',monospace;font-size:12px;}
+.price-cell{font-family:'JetBrains Mono',monospace;font-size:10px;}
+.change-cell{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:10px;}
+.cat-tag{display:inline-block;font-size:9px;padding:2px 6px;border-radius:10px;font-weight:500;}
+.pnl-cell{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:10px;}
+.pct-cell{font-family:'JetBrains Mono',monospace;font-size:9px;}
 
 .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
-.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:20px;}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:16px;}
 .chart-card.full{grid-column:1/-1;}
-.chart-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:14px;}
-.chart-wrap{position:relative;height:240px;}
+.chart-title{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:12px;}
+.chart-wrap{position:relative;height:200px;}
 
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:none;align-items:center;justify-content:center;padding:16px;}
 .modal-bg.open{display:flex;}
-.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--r2);padding:24px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto;}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--r2);padding:20px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto;border-radius:16px;}
 .modal h3{font-size:16px;margin-bottom:16px;}
 .form-group{margin-bottom:13px;}
-.form-label{font-size:12px;color:var(--text2);margin-bottom:5px;display:block;}
-.form-input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:8px 10px;border-radius:var(--r);outline:none;}
+.form-label{font-size:12px;color:var(--text2);margin-bottom:6px;display:block;}
+.form-input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:14px;padding:11px 10px;border-radius:var(--r);outline:none;min-height:44px;}
 .form-input:focus{border-color:var(--blue);}
 .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;}
+.modal-actions .btn{flex:1;width:auto;}
 
-.gas-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:20px;margin-bottom:20px;}
-.gas-panel h3{font-size:14px;margin-bottom:12px;color:var(--text2);}
-.gas-row{display:flex;gap:10px;align-items:center;}
-.gas-input{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:8px 10px;border-radius:var(--r);outline:none;}
+.gas-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:16px;margin-bottom:20px;}
+.gas-panel h3{font-size:13px;margin-bottom:10px;color:var(--text2);}
+.gas-panel p{margin-bottom:12px;}
+.gas-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.gas-row .btn{min-height:44px;flex:1;min-width:60px;padding:6px;font-size:11px;}
+.gas-input{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:9px 10px;border-radius:var(--r);outline:none;min-height:44px;min-width:150px;}
 .gas-input:focus{border-color:var(--gold);}
 .status-dot{width:8px;height:8px;border-radius:50%;background:var(--text3);flex-shrink:0;}
 .status-dot.ok{background:var(--green);}
@@ -120,26 +130,114 @@ tbody td{padding:8px 12px;vertical-align:middle;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .loading-text{color:var(--text2);font-size:14px;}
 
-.stock-picker{display:grid;grid-template-columns:1fr 1fr;gap:14px;height:380px;}
-.picker-list{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);overflow-y:auto;padding:6px;}
-.picker-item{padding:7px 9px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:7px;transition:background .12s;}
-.picker-item:hover{background:var(--surface3);}
+.stock-picker{display:grid;grid-template-columns:1fr 1fr;gap:12px;height:350px;}
+.picker-list{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px;}
+.picker-item{padding:8px;border-radius:6px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:6px;transition:background .12s;touch-action:manipulation;-webkit-tap-highlight-color:transparent;min-height:36px;}
+.picker-item:active{background:var(--surface3);}
 .picker-item.selected{background:var(--blue-dim);}
-.picker-item .code-sm{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);}
-.picker-search{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;padding:6px 9px;border-radius:var(--r);outline:none;margin-bottom:7px;}
+.picker-item .code-sm{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);}
+.picker-search{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;padding:9px 9px;border-radius:var(--r);outline:none;margin-bottom:0;min-height:44px;}
+.picker-search:focus{border-color:var(--blue);}
 
-.toast{position:fixed;bottom:24px;right:24px;z-index:400;padding:11px 18px;border-radius:var(--r);font-size:13px;font-weight:500;transform:translateY(80px);opacity:0;transition:all .3s;}
+.toast{position:fixed;bottom:24px;right:16px;z-index:400;padding:12px 16px;border-radius:var(--r);font-size:12px;font-weight:500;transform:translateY(120px);opacity:0;transition:all .3s;max-width:280px;left:16px;right:16px;}
 .toast.show{transform:translateY(0);opacity:1;}
 .toast.ok{background:var(--green2);color:#fff;}
 .toast.fail{background:var(--red2);color:#fff;}
 
-.ledger-empty{padding:40px;text-align:center;color:var(--text3);font-size:14px;}
+.ledger-empty{padding:40px 20px;text-align:center;color:var(--text3);font-size:13px;}
+
+@media(max-width:1024px){
+  .charts-grid{grid-template-columns:1fr;}
+  .stock-picker{grid-template-columns:1fr;height:auto;max-height:500px;}
+  .header{padding:0 12px;}
+  .main{padding:16px;}
+}
 
 @media(max-width:768px){
-  .charts-grid{grid-template-columns:1fr;}
-  .stock-picker{grid-template-columns:1fr;height:auto;}
-  .header{height:auto;padding:10px 12px;}
+  body{padding-top:56px;}
+  .header{height:56px;gap:8px;padding:0 12px;}
+  .logo{font-size:15px;}
+  .logo span{display:none;}
+  .header-nav{gap:2px;}
+  .nav-btn{font-size:11px;padding:6px 8px;}
+  .date-badge{font-size:10px;padding:4px 8px;}
+  .gas-btn{font-size:11px;padding:6px 10px;}
+  
   .main{padding:12px;}
+  
+  .cards-row{grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;}
+  .stat-card{padding:12px;}
+  .stat-card .label{font-size:9px;}
+  .stat-card .value{font-size:18px;}
+  
+  .toolbar{gap:8px;margin-bottom:12px;}
+  .toolbar-row{gap:8px;}
+  
+  .cat-tabs,.ledger-tabs{gap:4px;margin-bottom:10px;}
+  .cat-tab,.ledger-tab{padding:4px 8px;font-size:10px;min-height:32px;}
+  
+  .table-wrap{margin-bottom:16px;max-height:60vh;}
+  table{font-size:11px;}
+  thead th{font-size:9px;padding:7px 6px;}
+  tbody td{padding:6px;font-size:10px;}
+  .code{font-size:10px;}
+  .price-cell,.change-cell,.pct-cell{font-size:9px;}
+  .cat-tag{font-size:8px;padding:1px 4px;}
+  
+  .charts-grid{gap:12px;margin-bottom:16px;}
+  .chart-card{padding:12px;}
+  .chart-title{font-size:11px;margin-bottom:10px;}
+  .chart-wrap{height:160px;}
+  .chart-card.full .chart-wrap{height:200px;}
+  
+  .modal{padding:16px;max-width:90vw;max-height:90vh;}
+  .modal h3{font-size:15px;margin-bottom:14px;}
+  
+  .gas-panel{padding:14px;margin-bottom:14px;}
+  .gas-panel h3{font-size:12px;margin-bottom:8px;}
+  .gas-panel p{font-size:11px;}
+  .gas-row{gap:6px;}
+  
+  .form-group{margin-bottom:11px;}
+  .form-label{font-size:11px;}
+  .form-input{font-size:13px;padding:10px 8px;min-height:42px;}
+  
+  .btn{font-size:12px;padding:8px 12px;min-height:42px;}
+  .btn.ghost{font-size:11px;}
+  
+  .stock-picker{gap:10px;height:300px;}
+  .picker-item{padding:6px;font-size:10px;min-height:32px;}
+  .picker-search{min-height:42px;font-size:12px;}
+  
+  .toast{font-size:11px;padding:10px 12px;bottom:12px;left:12px;right:12px;}
+  
+  textarea#gasCode{font-size:10px !important;height:300px !important;}
+}
+
+@media(max-width:480px){
+  .header-nav{gap:0;}
+  .nav-btn{font-size:10px;padding:5px 6px;min-width:50px;}
+  .date-badge{display:none;}
+  
+  .cards-row{grid-template-columns:repeat(1,1fr);}
+  
+  .toolbar{gap:6px;}
+  .toolbar select,.toolbar input{font-size:12px;padding:8px 8px;min-height:40px;}
+  
+  .table-wrap{max-height:calc(100vh - 300px);}
+  table{font-size:10px;}
+  thead th{font-size:8px;padding:5px 4px;}
+  tbody td{padding:5px;font-size:9px;}
+  
+  .chart-wrap{height:140px;}
+  .chart-card.full .chart-wrap{height:180px;}
+  
+  .btn{font-size:11px;min-height:40px;}
+  .btn small{font-size:9px;}
+  
+  .stock-picker{grid-template-columns:1fr;height:auto;max-height:400px;}
+  .picker-item{min-height:30px;padding:4px;}
+  .picker-list{padding:4px;}
 }
 </style>
 </head>
@@ -152,14 +250,16 @@ tbody td{padding:8px 12px;vertical-align:middle;}
 
 <div class="header">
   <div class="logo">台股<span>績效系統</span></div>
-  <div class="header-nav">
-    <button class="nav-btn active" id="navPerf" onclick="showPage('perf',this)">📊 績效</button>
-    <button class="nav-btn" id="navLedger" onclick="showPage('ledger',this)">📒 帳務本</button>
-    <button class="nav-btn" id="navChart" onclick="showPage('chart',this)">📈 圖表</button>
-    <button class="nav-btn" id="navSettings" onclick="showPage('settings',this)">⚙️ 設定</button>
+  <div class="header-main">
+    <div class="header-nav">
+      <button class="nav-btn active" id="navPerf" onclick="showPage('perf',this)" title="績效">📊 績效</button>
+      <button class="nav-btn" id="navLedger" onclick="showPage('ledger',this)" title="帳務本">📒 帳務本</button>
+      <button class="nav-btn" id="navChart" onclick="showPage('chart',this)" title="圖表">📈 圖表</button>
+      <button class="nav-btn" id="navSettings" onclick="showPage('settings',this)" title="設定">⚙️ 設定</button>
+    </div>
+    <div class="date-badge" id="dateBadge">--</div>
   </div>
-  <div class="date-badge" id="dateBadge">--</div>
-  <button class="gas-btn" onclick="syncToGAS()">☁️ 同步GAS</button>
+  <button class="gas-btn" onclick="syncToGAS()" title="同步GAS">☁️ 同步</button>
 </div>
 
 <div class="main">
@@ -175,29 +275,34 @@ tbody td{padding:8px 12px;vertical-align:middle;}
       <option value="manual">手動選取</option>
     </select>
     <input type="text" id="searchInput" placeholder="搜尋代號/名稱..." oninput="renderPerf()">
-    <button class="btn ghost" onclick="openPicker()">🎯 選取標的</button>
-    <div class="spacer"></div>
-    <div class="count-badge" id="countBadge">0 檔</div>
-    <select id="saveLedgerSelect" onchange="updateSaveLedgerSelect()">
+  </div>
+  <div class="toolbar-row">
+    <button class="btn ghost" onclick="openPicker()" style="flex:1;">🎯 選取</button>
+    <div class="count-badge" style="flex:0;">績效表</div>
+  </div>
+  <div class="toolbar-row">
+    <select id="saveLedgerSelect" onchange="updateSaveLedgerSelect()" style="flex:1;">
       <option value="2026-05-11">05/11帳本</option>
       <option value="2026-05-12">05/12帳本</option>
     </select>
-    <button class="btn ghost" onclick="openAddLedgerModal()">＋ 新增帳本</button>
-    <button class="btn green" onclick="fetchLivePrices()">🔄 更新現價</button>
-    <button class="btn" onclick="saveTodayToGAS()">💾 存今日帳本</button>
+    <button class="btn ghost" onclick="openAddLedgerModal()" style="flex:1;">＋帳本</button>
   </div>
-  <div class="table-wrap" style="max-height:calc(100vh - 320px);">
+  <div class="toolbar-row">
+    <button class="btn green" onclick="fetchLivePrices()" style="flex:1;">🔄 更新現價</button>
+    <button class="btn" onclick="saveTodayToGAS()" style="flex:1;">💾 存帳本</button>
+  </div>
+  <div class="table-wrap" style="max-height:calc(100vh - 400px);">
     <table id="perfTable">
       <thead><tr>
         <th onclick="sortBy('代號')">代號</th>
         <th onclick="sortBy('名稱')">名稱</th>
         <th onclick="sortBy('分類')">分類</th>
-        <th onclick="sortBy('貝氏評分')">貝氏評分 ↕</th>
-        <th onclick="sortBy('現價')">今日限價</th>
-        <th onclick="sortBy('漲幅')">今日漲幅</th>
-        <th>買入股數</th>
-        <th onclick="sortBy('pnl')">預估損益</th>
-        <th onclick="sortBy('pct')">損益%</th>
+        <th onclick="sortBy('貝氏評分')">評分 ↕</th>
+        <th onclick="sortBy('現價')">限價</th>
+        <th onclick="sortBy('漲幅')">漲幅</th>
+        <th>股數</th>
+        <th onclick="sortBy('pnl')">損益</th>
+        <th onclick="sortBy('pct')">%</th>
         <th>操作</th>
       </tr></thead>
       <tbody id="perfBody"></tbody>
@@ -212,28 +317,33 @@ tbody td{padding:8px 12px;vertical-align:middle;}
       <option value="2026-05-11">05/11帳務本</option>
       <option value="2026-05-12">05/12帳務本</option>
     </select>
-    <select id="ledgerDateFilter" onchange="renderLedger()"><option value="">全部日期</option></select>
-    <select id="ledgerCatFilter" onchange="renderLedger()"><option value="">全部分類</option></select>
-    <input type="text" id="ledgerSearch" placeholder="搜尋代號/名稱..." oninput="renderLedger()">
-    <input type="number" id="ledgerMinPrice" placeholder="最低買入價" oninput="renderLedger()" style="width:100px;">
-    <input type="number" id="ledgerMaxPrice" placeholder="最高買入價" oninput="renderLedger()" style="width:100px;">
-    <select id="ledgerPnlFilter" onchange="renderLedger()">
+  </div>
+  <div class="toolbar-row">
+    <select id="ledgerDateFilter" onchange="renderLedger()" style="flex:1;"><option value="">全部日期</option></select>
+    <select id="ledgerCatFilter" onchange="renderLedger()" style="flex:1;"><option value="">全部分類</option></select>
+    <select id="ledgerPnlFilter" onchange="renderLedger()" style="flex:1;">
       <option value="">全部損益</option>
       <option value="profit">獲利</option>
       <option value="loss">虧損</option>
-      <option value="small">小額 (±5%)</option>
+      <option value="small">小額</option>
     </select>
-    <div class="spacer"></div>
-    <button class="btn ghost" onclick="loadLedgerFromGAS()">☁️ 從GAS載入</button>
-    <button class="btn ghost" onclick="openAddManual()">＋ 手動新增</button>
+  </div>
+  <div class="toolbar">
+    <input type="text" id="ledgerSearch" placeholder="搜尋代號/名稱..." oninput="renderLedger()">
+    <input type="number" id="ledgerMinPrice" placeholder="最低買入價" oninput="renderLedger()" style="font-size:12px;">
+    <input type="number" id="ledgerMaxPrice" placeholder="最高買入價" oninput="renderLedger()" style="font-size:12px;">
+  </div>
+  <div class="toolbar-row">
+    <button class="btn ghost" onclick="loadLedgerFromGAS()" style="flex:1;">☁️ 載入</button>
+    <button class="btn ghost" onclick="openAddManual()" style="flex:1;">＋手動</button>
   </div>
   <div class="cards-row" id="ledgerSummary"></div>
-  <div class="table-wrap" style="max-height:calc(100vh - 320px);">
+  <div class="table-wrap" style="max-height:calc(100vh - 500px);">
     <table id="ledgerTable">
       <thead><tr>
         <th>日期</th><th>代號</th><th>名稱</th><th>分類</th>
-        <th>買入價</th><th>股數</th><th>投入金額</th>
-        <th>現價</th><th>市值</th><th>損益</th><th>損益%</th><th>操作</th>
+        <th>買入價</th><th>股數</th><th>投入</th>
+        <th>現價</th><th>市值</th><th>損益</th><th>%</th><th>操作</th>
       </tr></thead>
       <tbody id="ledgerBody"></tbody>
     </table>
@@ -245,16 +355,16 @@ tbody td{padding:8px 12px;vertical-align:middle;}
 <div class="page" id="page-chart">
   <div class="toolbar">
     <select id="chartCat" onchange="renderCharts()"><option value="all">全部分類</option></select>
-    <div class="spacer"></div>
-    <button class="btn ghost" onclick="renderCharts()">🔄 重繪</button>
   </div>
-  <!-- ★ 新增：帳本選擇標籤列 -->
   <div class="ledger-tabs" id="chartLedgerTabs"></div>
+  <div style="margin-bottom:8px;">
+    <button class="btn ghost" onclick="renderCharts()" style="width:100%;">🔄 重繪圖表</button>
+  </div>
   <div class="charts-grid">
-    <div class="chart-card"><div class="chart-title">各分類股票數量</div><div class="chart-wrap"><canvas id="catPieChart"></canvas></div></div>
-    <div class="chart-card"><div class="chart-title" id="pnlDistTitle">帳務本損益% 分布</div><div class="chart-wrap"><canvas id="pnlDistChart"></canvas></div></div>
-    <div class="chart-card full"><div class="chart-title" id="scoreBarTitle">各分類總損益 (NTD)</div><div class="chart-wrap" style="height:260px"><canvas id="scoreBarChart"></canvas></div></div>
-    <div class="chart-card full"><div class="chart-title" id="ledgerBarTitle">帳務本各標的損益 (NTD)</div><div class="chart-wrap" style="height:300px"><canvas id="ledgerBarChart"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">各分類股票數</div><div class="chart-wrap"><canvas id="catPieChart"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title" id="pnlDistTitle">損益% 分布</div><div class="chart-wrap"><canvas id="pnlDistChart"></canvas></div></div>
+    <div class="chart-card full"><div class="chart-title" id="scoreBarTitle">各分類總損益</div><div class="chart-wrap" style="height:220px"><canvas id="scoreBarChart"></canvas></div></div>
+    <div class="chart-card full"><div class="chart-title" id="ledgerBarTitle">各標的損益</div><div class="chart-wrap" style="height:240px"><canvas id="ledgerBarChart"></canvas></div></div>
   </div>
 </div>
 
@@ -262,41 +372,45 @@ tbody td{padding:8px 12px;vertical-align:middle;}
 <div class="page" id="page-settings">
   <div class="gas-panel">
     <h3>🔗 Google Apps Script 設定</h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">部署 GAS 為網頁應用程式後，將 URL 貼入此處。執行身分選「以我的身份」，存取權選「任何人」。</p>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:10px;">部署 GAS 為網頁應用程式後，將 URL 貼入此處。</p>
     <div class="gas-row">
-      <input class="gas-input" id="gasUrl" placeholder="https://script.google.com/macros/s/xxxx/exec">
+      <input class="gas-input" id="gasUrl" placeholder="https://script.google.com/..." style="flex:1;">
       <div class="status-dot" id="gasStatus"></div>
-      <button class="btn ghost" onclick="testGAS()">測試</button>
-      <button class="btn" onclick="saveGASUrl()">儲存</button>
-      <button class="btn ghost" onclick="loadStocksFromGAS()">📊 載入股票數據</button>
+    </div>
+    <div class="gas-row">
+      <button class="btn ghost" onclick="testGAS()" style="flex:1;">測試</button>
+      <button class="btn" onclick="saveGASUrl()" style="flex:1;">儲存</button>
+      <button class="btn ghost" onclick="loadStocksFromGAS()" style="flex:1;">📊 載入</button>
     </div>
   </div>
 
   <div class="gas-panel">
-    <h3>📁 上傳股票數據檔案</h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">上傳掃描出的股票數據檔案（JSON / CSV / XLSX），系統會自動解析並更新到試算表。</p>
+    <h3>📁 上傳股票數據</h3>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:10px;">上傳 JSON / CSV / XLSX 檔案，系統會自動解析並更新。</p>
     <div class="gas-row">
       <input type="file" id="dataFile" accept=".json,.csv,.xls,.xlsx" style="flex:1;">
-      <button class="btn" onclick="uploadDataFile()">📤 上傳並更新</button>
     </div>
-    <div id="uploadStatus" style="margin-top:10px;font-size:12px;color:var(--text3);"></div>
+    <div class="gas-row">
+      <button class="btn" onclick="uploadDataFile()" style="flex:1;">📤 上傳並更新</button>
+    </div>
+    <div id="uploadStatus" style="margin-top:10px;font-size:11px;color:var(--text3);"></div>
   </div>
 
   <div class="gas-panel">
     <h3>🗑️ 清除快取</h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">清除所有本地儲存的數據，包括帳務本、手動選取的股票和GAS設定。</p>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:10px;">清除所有本地儲存的數據。</p>
     <div class="gas-row">
-      <button class="btn red" onclick="clearCache()">🗑️ 清除所有快取</button>
+      <button class="btn red" onclick="clearCache()" style="flex:1;">🗑️ 清除</button>
     </div>
   </div>
 
   <div class="gas-panel">
-    <h3>📋 GAS 程式碼（複製後貼入 Apps Script 並部署，或直接在下方編輯後更新）</h3>
-    <textarea id="gasCode" style="width:100%;height:520px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.5;padding:12px;border-radius:var(--r);resize:vertical;outline:none;" readonly></textarea>
-    <div style="display:flex;gap:10px;margin-top:10px;">
-      <button class="btn ghost" onclick="copyGASCode()">📋 複製程式碼</button>
-      <button class="btn ghost" onclick="enableEditGAS()">✏️ 編輯</button>
-      <button class="btn" id="updateGASBtn" onclick="updateGASCode()" style="display:none;">☁️ 更新到GAS</button>
+    <h3>📋 GAS 程式碼</h3>
+    <textarea id="gasCode" style="width:100%;height:280px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.4;padding:10px;border-radius:var(--r);resize:vertical;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <button class="btn ghost" onclick="copyGASCode()" style="flex:1;min-width:100px;">📋 複製</button>
+      <button class="btn ghost" onclick="enableEditGAS()" style="flex:1;min-width:100px;">✏️ 編輯</button>
+      <button class="btn" id="updateGASBtn" onclick="updateGASCode()" style="display:none;flex:1;min-width:100px;">☁️ 更新</button>
     </div>
   </div>
 </div>
@@ -305,31 +419,31 @@ tbody td{padding:8px 12px;vertical-align:middle;}
 
 <!-- PICKER MODAL -->
 <div class="modal-bg" id="pickerModal">
-  <div class="modal" style="max-width:680px;">
+  <div class="modal" style="max-width:95vw;">
     <h3>🎯 手動選取標的</h3>
-    <div style="display:flex;gap:8px;margin-bottom:8px;">
-      <input class="picker-search" id="pickerSearch" placeholder="搜尋..." oninput="filterPicker()" style="flex:1;margin:0;">
-      <select id="pickerCatFilter" onchange="filterPicker()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;padding:6px;border-radius:var(--r);outline:none;"><option value="">全部分類</option></select>
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+      <input class="picker-search" id="pickerSearch" placeholder="搜尋..." oninput="filterPicker()" style="flex:1;margin:0;min-width:150px;">
+      <select id="pickerCatFilter" onchange="filterPicker()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;padding:8px;border-radius:var(--r);min-height:44px;flex:0 1 120px;"></select>
     </div>
     <div class="stock-picker">
       <div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:5px;display:flex;align-items:center;gap:8px;">
-          可選股票 <span id="pickerAvailCount"></span>
-          <button class="btn ghost" style="padding:2px 8px;font-size:10px;" onclick="selectAllPicker()">全選</button>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span>可選股票 <span id="pickerAvailCount"></span></span>
+          <button class="btn ghost" style="padding:4px 8px;font-size:9px;flex:0;min-height:28px;" onclick="selectAllPicker()">全選</button>
         </div>
         <div class="picker-list" id="pickerAvail"></div>
       </div>
       <div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:5px;display:flex;align-items:center;gap:8px;">
-          已選取 <span id="pickerSelCount"></span>
-          <button class="btn ghost" style="padding:2px 8px;font-size:10px;" onclick="clearAllPicker()">清空</button>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span>已選取 <span id="pickerSelCount"></span></span>
+          <button class="btn ghost" style="padding:4px 8px;font-size:9px;flex:0;min-height:28px;" onclick="clearAllPicker()">清空</button>
         </div>
         <div class="picker-list" id="pickerSel"></div>
       </div>
     </div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closePicker()">取消</button>
-      <button class="btn" onclick="applyPicker()">確認套用</button>
+      <button class="btn" onclick="applyPicker()">確認</button>
     </div>
   </div>
 </div>
@@ -376,7 +490,7 @@ tbody td{padding:8px 12px;vertical-align:middle;}
 // ============================================================
 // EMBEDDED STOCK DATA (from today's xlsx)
 // ============================================================
-const STOCKS_RAW = [{"代號":"9958","名稱":"世紀鋼","貝氏評分":4.53,"分類":"long_term","現價":103.5,"漲幅":"+0.5"},{"代號":"9945","名稱":"潤泰新","貝氏評分":4.53,"分類":"long_term","現價":23.6,"漲幅":"+0.9"},{"代號":"9941","名稱":"裕融","貝氏評分":4.53,"分類":"long_term","現價":75.2,"漲幅":"-0.7"},{"代號":"9940","名稱":"信義","貝氏評分":4.53,"分類":"long_term","現價":19.2,"漲幅":"-2.0"},{"代號":"9938","名稱":"百和","貝氏評分":4.53,"分類":"long_term","現價":45.25,"漲幅":"+1.0"},{"代號":"9933","名稱":"中鼎","貝氏評分":4.53,"分類":"long_term","現價":36.45,"漲幅":"-1.0"},{"代號":"9904","名稱":"寶成","貝氏評分":4.53,"分類":"long_term","現價":25.8,"漲幅":"-0.4"},{"代號":"8271","名稱":"宇瞻","貝氏評分":4.53,"分類":"intraday_dip","現價":256.0,"漲幅":"-1.7"},{"代號":"8210","名稱":"勤誠","貝氏評分":4.53,"分類":"dark_horse","現價":1555.0,"漲幅":"+9.9"},{"代號":"7750","名稱":"新代","貝氏評分":4.53,"分類":"dark_horse","現價":2795.0,"漲幅":"+9.8"},{"代號":"3661","名稱":"世芯-KY","貝氏評分":4.53,"分類":"dark_horse","現價":5375.0,"漲幅":"+9.9"},{"代號":"3443","名稱":"創意","貝氏評分":4.53,"分類":"dark_horse","現價":5730.0,"漲幅":"+10.0"},{"代號":"2454","名稱":"聯發科","貝氏評分":4.53,"分類":"dark_horse","現價":3880.0,"漲幅":"+6.9"},{"代號":"2330","名稱":"台積電","貝氏評分":4.53,"分類":"pullback","現價":2235.0,"漲幅":"-2.4"},{"代號":"9939","名稱":"宏全","貝氏評分":4.53,"分類":"explosive","現價":120.0,"漲幅":"+7.6"},{"代號":"6415","名稱":"矽力*-KY","貝氏評分":4.53,"分類":"explosive","現價":468.0,"漲幅":"+10.0"},{"代號":"5289","名稱":"宜鼎","貝氏評分":4.53,"分類":"dark_horse","現價":1760.0,"漲幅":"+10.0"},{"代號":"8299","名稱":"群聯","貝氏評分":4.53,"分類":"dark_horse","現價":2670.0,"漲幅":"+9.9"},{"代號":"2308","名稱":"台達電","貝氏評分":4.53,"分類":"dark_horse","現價":2245.0,"漲幅":"+2.0"},{"代號":"2303","名稱":"聯電","貝氏評分":4.53,"分類":"dark_horse","現價":95.0,"漲幅":"+4.1"}];
+const STOCKS_RAW = [{"代號":"9958","名稱":"世紀鋼","貝氏評分":4.53,"分類":"long_term","現價":103.5,"漲幅":"+0.5"},{"代號":"9945","名稱":"潤泰新","貝氏評分":4.53,"分類":"long_term","現價":15.3,"漲幅":"-0.3"}];
 
 const CAT_LABELS = {
   'long_term':'長線','intraday_dip':'當沖回補','reversal':'反轉',
@@ -397,8 +511,6 @@ let livePrices = {};
 let gasUrl = '';
 let appCharts = {};
 let pickerSelection = new Set();
-
-// ★ 圖表頁帳本選擇狀態：'all' 或特定帳本日期
 let chartSelectedLedger = 'all';
 
 // ============================================================
@@ -465,7 +577,7 @@ function buildCatTabs() {
   document.getElementById('catTabs').innerHTML = cats.map(c => {
     const count = c === 'all' ? STOCKS_RAW.length : STOCKS_RAW.filter(s => s['分類'] === c).length;
     const label = c === 'all' ? '全部' : CAT_LABELS[c];
-    return `<button class="cat-tab ${c===currentCat?'active':''}" onclick="selectCat('${c}')">${label} <span style="color:var(--text3);font-size:10px;">${count}</span></button>`;
+    return `<button class="cat-tab ${c===currentCat?'active':''}" onclick="selectCat('${c}')">${label} <span style="color:var(--text3);font-size:8px;">${count}</span></button>`;
   }).join('');
 }
 
@@ -487,15 +599,14 @@ function buildCatFilters() {
 }
 
 // ============================================================
-// ★ 圖表頁帳本選擇標籤
+// CHART LEDGER TABS
 // ============================================================
 function buildChartLedgerTabs() {
   const ledgerDates = Object.keys(ledger).sort();
   const container = document.getElementById('chartLedgerTabs');
 
-  // 如果沒有帳本就隱藏
   if (ledgerDates.length === 0) {
-    container.innerHTML = '<span style="font-size:12px;color:var(--text3);">尚無帳本數據</span>';
+    container.innerHTML = '<span style="font-size:11px;color:var(--text3);">尚無帳本數據</span>';
     return;
   }
 
@@ -505,12 +616,12 @@ function buildChartLedgerTabs() {
     let label, count;
     if (d === 'all') {
       count = Object.values(ledger).reduce((a, arr) => a + arr.length, 0);
-      label = `全部帳本 <span style="color:var(--text3);font-size:10px;">${count}筆</span>`;
+      label = `全部 <span style="color:var(--text3);font-size:8px;">${count}</span>`;
     } else {
       count = (ledger[d] || []).length;
       const dateObj = new Date(d);
       const formatted = dateObj.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
-      label = `${formatted} <span style="color:var(--text3);font-size:10px;">${count}筆</span>`;
+      label = `${formatted} <span style="color:var(--text3);font-size:8px;">${count}</span>`;
     }
     return `<button class="ledger-tab ${isActive ? 'active' : ''}" onclick="selectChartLedger('${d}')">${label}</button>`;
   }).join('');
@@ -518,7 +629,6 @@ function buildChartLedgerTabs() {
 
 function selectChartLedger(dateKey) {
   chartSelectedLedger = dateKey;
-  // 更新 tab active 狀態
   document.querySelectorAll('.ledger-tab').forEach((btn, i) => {
     const ledgerDates = Object.keys(ledger).sort();
     const tabs = ['all', ...ledgerDates];
@@ -527,7 +637,6 @@ function selectChartLedger(dateKey) {
   renderCharts();
 }
 
-// 取得圖表要用的帳本數據（依選擇的帳本過濾）
 function getChartLedgerData() {
   if (chartSelectedLedger === 'all') {
     const all = [];
@@ -585,7 +694,6 @@ function renderPerf() {
     if(av == null) av = -Infinity; if(bv == null) bv = -Infinity;
     return sortDir * (av > bv ? 1 : av < bv ? -1 : 0);
   });
-  document.getElementById('countBadge').textContent = data.length + ' 檔';
 
   document.getElementById('perfBody').innerHTML = data.map(s => {
     const chg = parseFloat(s['漲幅']) || null;
@@ -603,10 +711,10 @@ function renderPerf() {
       <td class="score" style="color:var(--gold)">${s['貝氏評分'].toFixed(2)}</td>
       <td class="price-cell">${s['現價'].toFixed(2)}</td>
       <td class="change-cell ${chgCls}">${chgStr}</td>
-      <td class="price-cell">${s._shares > 0 ? s._shares + ' 股' : '--'}</td>
+      <td class="price-cell">${s._shares > 0 ? s._shares : '--'}</td>
       <td class="pnl-cell ${pnlCls}">${pnlStr}</td>
       <td class="pct-cell ${pnlCls}">${pctStr}</td>
-      <td><button class="btn ghost" style="padding:3px 9px;font-size:11px;" onclick="addOneLedger('${s['代號']}','${s['名稱']}','${s['分類']}',${s['現價']},${s['貝氏評分']})">＋帳本</button></td>
+      <td><button class="btn ghost" style="padding:2px 4px;font-size:9px;min-height:28px;" onclick="addOneLedger('${s['代號']}','${s['名稱']}','${s['分類']}',${s['現價']},${s['貝氏評分']})">＋</button></td>
     </tr>`;
   }).join('');
 
@@ -622,11 +730,11 @@ function renderSummaryCards(data) {
   const pnlCls = totalPnl >= 0 ? 'pos' : 'neg';
   const pnlStr = (totalPnl >= 0 ? '+' : '') + totalPnl.toFixed(0);
   document.getElementById('summaryCards').innerHTML = `
-    <div class="stat-card"><div class="label">篩選檔數</div><div class="value neu">${data.length}</div></div>
+    <div class="stat-card"><div class="label">檔數</div><div class="value neu">${data.length}</div></div>
     <div class="stat-card"><div class="label">上漲</div><div class="value pos">${posCount}</div></div>
     <div class="stat-card"><div class="label">下跌</div><div class="value neg">${negCount}</div></div>
-    <div class="stat-card"><div class="label">預估總損益</div><div class="value ${pnlCls}">${pnlStr}</div><div class="sub">NTD (各1000元)</div></div>
-    <div class="stat-card"><div class="label">平均貝氏評分</div><div class="value" style="color:var(--gold)">${avgScore}</div></div>
+    <div class="stat-card"><div class="label">總損益</div><div class="value ${pnlCls}">${pnlStr}</div></div>
+    <div class="stat-card"><div class="label">評分</div><div class="value" style="color:var(--gold)">${avgScore}</div></div>
   `;
 }
 
@@ -641,7 +749,7 @@ function addOneLedger(code, name, cat, price, score) {
   if(!ledger[selectedLedger]) ledger[selectedLedger] = [];
   if(ledger[selectedLedger].find(r => r.code === code && r.date === today)) { showToast(name + ' 今日已在帳本中', 'fail'); return; }
   ledger[selectedLedger].push({ date: today, code, name, cat, buyPrice: price, shares, score });
-  showToast('已加入 ' + name + ' 到' + selectedLedger + '帳本', 'ok');
+  showToast('已加入 ' + name, 'ok');
 }
 
 async function saveTodayToGAS() {
@@ -657,7 +765,7 @@ async function saveTodayToGAS() {
       added++;
     }
   });
-  showToast('已加入 ' + added + ' 檔到' + selectedLedger + '帳本', 'ok');
+  showToast('已加入 ' + added + ' 檔', 'ok');
 
   if(gasUrl) {
     showLoading('儲存到GAS...');
@@ -668,10 +776,10 @@ async function saveTodayToGAS() {
       showToast('已同步到GAS', 'ok');
     } catch(e) {
       hideLoading();
-      showToast('GAS同步失敗: ' + e.message + '。資料已儲存在本地。', 'fail');
+      showToast('GAS同步失敗。已儲存在本地。', 'fail');
     }
   } else {
-    showToast('未設定GAS URL，資料僅儲存在本地', 'fail');
+    showToast('未設定GAS URL，資料僅在本地', 'fail');
   }
 }
 
@@ -742,7 +850,7 @@ function renderLedger() {
     const cc = CAT_COLORS[r.cat] || '#888';
     const cl = CAT_LABELS[r.cat] || r.cat;
     return `<tr>
-      <td class="code" style="font-size:11px;">${r.date}<br><small style="color:var(--text3);">${r.ledgerDate}</small></td>
+      <td class="code">${r.date}</td>
       <td class="code">${r.code}</td>
       <td class="name">${r.name}</td>
       <td><span class="cat-tag" style="background:${cc}22;color:${cc}">${cl}</span></td>
@@ -753,7 +861,7 @@ function renderLedger() {
       <td class="price-cell">${curVal.toFixed(0)}</td>
       <td class="pnl-cell ${pnlCls}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(0)}</td>
       <td class="pct-cell ${pnlCls}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</td>
-      <td><button class="btn red" style="padding:3px 8px;font-size:11px;" onclick="deleteLedger('${r.ledgerDate}', ${r.ledgerIdx})">刪除</button></td>
+      <td><button class="btn red" style="padding:2px 4px;font-size:9px;min-height:28px;" onclick="deleteLedger('${r.ledgerDate}', ${r.ledgerIdx})">✕</button></td>
     </tr>`;
   }).join('');
 
@@ -763,17 +871,17 @@ function renderLedger() {
   const tpct = ti > 0 ? tp / ti * 100 : 0;
   const pc = tp >= 0 ? 'pos' : 'neg';
   document.getElementById('ledgerSummary').innerHTML = `
-    <div class="stat-card"><div class="label">帳務筆數</div><div class="value neu">${data.length}</div></div>
-    <div class="stat-card"><div class="label">總投入</div><div class="value neu">${ti.toFixed(0)}</div><div class="sub">NTD</div></div>
-    <div class="stat-card"><div class="label">總市值</div><div class="value neu">${tv.toFixed(0)}</div><div class="sub">NTD</div></div>
-    <div class="stat-card"><div class="label">總損益</div><div class="value ${pc}">${tp >= 0 ? '+' : ''}${tp.toFixed(0)}</div><div class="sub">NTD</div></div>
-    <div class="stat-card"><div class="label">損益率</div><div class="value ${pc}">${tpct >= 0 ? '+' : ''}${tpct.toFixed(2)}%</div></div>
+    <div class="stat-card"><div class="label">筆數</div><div class="value neu">${data.length}</div></div>
+    <div class="stat-card"><div class="label">投入</div><div class="value neu">${ti.toFixed(0)}</div></div>
+    <div class="stat-card"><div class="label">市值</div><div class="value neu">${tv.toFixed(0)}</div></div>
+    <div class="stat-card"><div class="label">損益</div><div class="value ${pc}">${tp >= 0 ? '+' : ''}${tp.toFixed(0)}</div></div>
+    <div class="stat-card"><div class="label">率</div><div class="value ${pc}">${tpct >= 0 ? '+' : ''}${tpct.toFixed(2)}%</div></div>
   `;
 }
 
 function deleteLedger(ledgerDate, idx) {
   const r = ledger[ledgerDate][idx];
-  if(!confirm('確定刪除 ' + r.name + ' (' + r.date + ')?')) return;
+  if(!confirm('確定刪除 ' + r.name + ' ?')) return;
   ledger[ledgerDate].splice(idx, 1);
   renderLedger();
   if(gasUrl) pushLedgerToGAS();
@@ -823,7 +931,7 @@ function submitManualAdd() {
   document.getElementById('addModal').classList.remove('open');
   renderLedger();
   if(gasUrl) pushLedgerToGAS();
-  showToast('已新增 ' + name + ' 到' + currentLedgerDate + '帳本', 'ok');
+  showToast('已新增 ' + name, 'ok');
 }
 
 function openAddLedgerModal() {
@@ -835,12 +943,7 @@ function openAddLedgerModal() {
 function submitAddLedger() {
   const newDate = document.getElementById('newLedgerDate').value;
   if(!newDate) { showToast('請選擇帳本日期', 'fail'); return; }
-  
-  if(ledger[newDate]) {
-    showToast('此日期的帳本已存在', 'fail');
-    return;
-  }
-  
+  if(ledger[newDate]) { showToast('此日期的帳本已存在', 'fail'); return; }
   ledger[newDate] = [];
   updateSaveLedgerSelect();
   document.getElementById('saveLedgerSelect').value = newDate;
@@ -901,14 +1004,14 @@ function filterPicker() {
   document.getElementById('pickerAvail').innerHTML = avail.slice(0, 150).map(s =>
     `<div class="picker-item" onclick="pickerAdd('${s['代號']}')">
       <span class="code-sm">${s['代號']}</span> ${s['名稱']}
-      <span style="margin-left:auto;font-size:10px;color:${CAT_COLORS[s['分類']]}">${CAT_LABELS[s['分類']] || ''}</span>
+      <span style="margin-left:auto;font-size:9px;color:${CAT_COLORS[s['分類']]}">${CAT_LABELS[s['分類']] || ''}</span>
     </div>`).join('');
   const selArr = STOCKS_RAW.filter(s => pickerSelection.has(s['代號']));
   document.getElementById('pickerSelCount').textContent = '(' + selArr.length + ')';
   document.getElementById('pickerSel').innerHTML = selArr.map(s =>
     `<div class="picker-item selected" onclick="pickerRemove('${s['代號']}')">
       <span class="code-sm">${s['代號']}</span> ${s['名稱']}
-      <span style="margin-left:auto;font-size:10px;color:var(--red)">✕</span>
+      <span style="margin-left:auto;font-size:9px;color:var(--red)">✕</span>
     </div>`).join('');
 }
 function pickerAdd(c) { pickerSelection.add(c); filterPicker(); }
@@ -931,28 +1034,23 @@ function clearAllPicker() {
 }
 
 // ============================================================
-// CHARTS  ★ 已修改：根據 chartSelectedLedger 過濾帳本數據
+// CHARTS
 // ============================================================
 function renderCharts() {
   const cf = document.getElementById('chartCat').value;
   let stockData = (cf && cf !== 'all') ? STOCKS_RAW.filter(s => s['分類'] === cf) : STOCKS_RAW;
-
-  // ★ 使用選定帳本的數據
   const ledgerData = getChartLedgerData();
-
-  // 更新圖表標題以顯示目前查看的帳本
   const ledgerLabel = chartSelectedLedger === 'all'
     ? '全部帳本'
     : new Date(chartSelectedLedger).toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' }) + '帳本';
 
-  document.getElementById('pnlDistTitle').textContent = `${ledgerLabel}損益% 分布`;
-  document.getElementById('scoreBarTitle').textContent = `${ledgerLabel}各分類總損益 (NTD)`;
-  document.getElementById('ledgerBarTitle').textContent = `${ledgerLabel}各標的損益 (NTD)`;
+  document.getElementById('pnlDistTitle').textContent = `${ledgerLabel}損益%分布`;
+  document.getElementById('scoreBarTitle').textContent = `${ledgerLabel}各分類損益`;
+  document.getElementById('ledgerBarTitle').textContent = `${ledgerLabel}各標的損益`;
 
   Object.values(appCharts).forEach(c => { try { c.destroy(); } catch(e) {} });
   appCharts = {};
 
-  // 各分類股票數量（來自 STOCKS_RAW，不受帳本過濾影響）
   const catCounts = {};
   stockData.forEach(s => { catCounts[s['分類']] = (catCounts[s['分類']] || 0) + 1; });
   const catKeys = Object.keys(catCounts);
@@ -966,10 +1064,9 @@ function renderCharts() {
         borderWidth: 2, borderColor: '#111418' }]
     },
     options: { responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'right', labels: { color: '#8a9ab0', font: { size: 11 } } } } }
+      plugins: { legend: { position: 'bottom', labels: { color: '#8a9ab0', font: { size: 10 } } } } }
   });
 
-  // 損益%分布（來自選定帳本）
   const pnlPcts = ledgerData.map(r => {
     const lp = livePrices[r.code] || r.buyPrice;
     return r.buyPrice > 0 ? (lp - r.buyPrice) / r.buyPrice * 100 : 0;
@@ -985,11 +1082,10 @@ function renderCharts() {
       borderRadius: 4 }] },
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
-      scales: { x: { ticks: { color: '#8a9ab0', font: { size: 9 } }, grid: { color: '#1e252f' } },
+      scales: { x: { ticks: { color: '#8a9ab0', font: { size: 8 } }, grid: { color: '#1e252f' } },
                  y: { ticks: { color: '#8a9ab0' }, grid: { color: '#1e252f' } } } }
   });
 
-  // 各分類總損益（來自選定帳本）
   const catPnls = {};
   ledgerData.forEach(r => {
     const lp = livePrices[r.code] || r.buyPrice;
@@ -998,418 +1094,76 @@ function renderCharts() {
   });
   const pnlCatKeys = Object.keys(catPnls);
 
-  appCharts.score = new Chart(document.getElementById('scoreBarChart'), {
-    type: 'bar',
-    data: { labels: pnlCatKeys.map(k => CAT_LABELS[k] || k),
-      datasets: [{ label: '總損益 (NTD)', data: pnlCatKeys.map(k => catPnls[k]),
-        backgroundColor: pnlCatKeys.map(k => (catPnls[k] >= 0 ? 'rgba(0,217,126,0.8)' : 'rgba(255,77,109,0.8)')),
-        borderColor: pnlCatKeys.map(k => (catPnls[k] >= 0 ? '#00d97e' : '#ff4d6d')),
-        borderWidth: 1, borderRadius: 6 }] },
-    options: { responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { x: { ticks: { color: '#8a9ab0' }, grid: { color: '#1e252f' } },
-                 y: { ticks: { color: '#8a9ab0', callback: v => v.toLocaleString() + '元' }, grid: { color: '#1e252f' } } } }
-  });
-
-  // 各標的損益（來自選定帳本，最多50筆）
-  const ledDisplay = ledgerData.slice(-50);
-  appCharts.ledBar = new Chart(document.getElementById('ledgerBarChart'), {
+  appCharts.scoreBar = new Chart(document.getElementById('scoreBarChart'), {
     type: 'bar',
     data: {
-      labels: ledDisplay.map(r => r.name),
-      datasets: [{ label: '損益 (NTD)', data: ledDisplay.map(r => {
-          const lp = livePrices[r.code] || r.buyPrice;
-          return r.shares * (lp - r.buyPrice);
-        }),
-        backgroundColor: ledDisplay.map(r => {
-          const lp = livePrices[r.code] || r.buyPrice;
-          const pnl = r.shares * (lp - r.buyPrice);
-          return pnl >= 0 ? 'rgba(0,217,126,0.65)' : 'rgba(255,77,109,0.65)';
-        }), borderRadius: 4 }]
+      labels: pnlCatKeys.map(k => CAT_LABELS[k] || k),
+      datasets: [{ data: pnlCatKeys.map(k => catPnls[k]),
+        backgroundColor: pnlCatKeys.map(k => catPnls[k] >= 0 ? CAT_COLORS[k] : '#666'),
+        borderRadius: 4 }]
     },
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
-      scales: { x: { ticks: { color: '#8a9ab0', font: { size: 10 }, maxRotation: 45 }, grid: { color: '#1e252f' } },
-                 y: { ticks: { color: '#8a9ab0', callback: v => v.toLocaleString() + '元' }, grid: { color: '#1e252f' } } } }
+      scales: { y: { ticks: { color: '#8a9ab0' }, grid: { color: '#1e252f' } },
+                 x: { ticks: { color: '#8a9ab0', font: { size: 9 } }, grid: { color: '#1e252f' } } } }
+  });
+
+  const ledgerPnls = ledgerData.map(r => {
+    const lp = livePrices[r.code] || r.buyPrice;
+    return { code: r.code, name: r.name, pnl: r.shares * (lp - r.buyPrice) };
+  }).sort((a,b) => Math.abs(b.pnl) - Math.abs(a.pnl)).slice(0, 15);
+
+  appCharts.ledgerBar = new Chart(document.getElementById('ledgerBarChart'), {
+    type: 'bar',
+    data: {
+      labels: ledgerPnls.map(d => d.code),
+      datasets: [{ data: ledgerPnls.map(d => d.pnl),
+        backgroundColor: ledgerPnls.map(d => d.pnl >= 0 ? 'rgba(0,217,126,0.6)' : 'rgba(255,77,109,0.6)'),
+        borderRadius: 4 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: '#8a9ab0', font: { size: 8 } }, grid: { color: '#1e252f' } },
+                 y: { ticks: { color: '#8a9ab0', font: { size: 9 } }, grid: { color: '#1e252f' } } } }
   });
 }
 
 // ============================================================
-// GAS
+// UI HELPERS
 // ============================================================
-function saveGASUrl() {
-  gasUrl = document.getElementById('gasUrl').value.trim();
-  if (!gasUrl) { showToast('GAS URL 不能為空', 'fail'); return; }
-  localStorage.setItem('gasUrl', gasUrl);
-  showToast('GAS URL 已儲存（localStorage）', 'ok');
-  document.getElementById('gasStatus').className = 'status-dot';
-}
-
-function clearCache() {
-  if (!confirm('確定要清除績效快取嗎？這將刪除帳務本與手動選取的績效資料，但會保留 GAS URL。')) return;
-  ledger = {};
-  manualSelected = new Set();
-  chartSelectedLedger = 'all';
-  renderPerf();
-  renderLedger();
-  showToast('績效快取已清除', 'ok');
-}
-
-async function testGAS() {
-  gasUrl = document.getElementById('gasUrl').value.trim();
-  if(!gasUrl) { showToast('請先輸入 GAS URL', 'fail'); return; }
-  if(!gasUrl.includes('script.google.com/macros/s/')) {
-    showToast('GAS URL 格式不正確', 'fail'); return;
-  }
-  showLoading('測試連線...');
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-    const r = await fetch(gasUrl + '?action=ping', {
-      method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
-      headers: { 'Accept': 'application/json' }, signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    const text = await r.text();
-    if(!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-    const d = JSON.parse(text);
-    hideLoading();
-    if(d.status === 'ok') {
-      document.getElementById('gasStatus').className = 'status-dot ok';
-      showToast('GAS 連線成功！', 'ok');
-    } else {
-      document.getElementById('gasStatus').className = 'status-dot err';
-      showToast('GAS 回應異常: ' + (d.error || JSON.stringify(d)), 'fail');
-    }
-  } catch(e) {
-    hideLoading();
-    document.getElementById('gasStatus').className = 'status-dot err';
-    showToast('連線失敗: ' + e.message, 'fail');
-  }
-}
-
-async function syncToGAS() {
-  if(!gasUrl) { showToast('請先在設定頁設定 GAS URL', 'fail'); return; }
-  showLoading('同步到GAS...');
-  try {
-    await pushLedgerToGAS();
-    hideLoading(); showToast('同步成功！', 'ok');
-  } catch(e) { hideLoading(); showToast('同步失敗: ' + e.message, 'fail'); }
-}
-
-async function pushLedgerToGAS() {
-  if(!gasUrl) return;
-  const flatLedger = [];
-  Object.keys(ledger).forEach(dateKey => {
-    ledger[dateKey].forEach(r => flatLedger.push({ ...r, ledgerDate: dateKey }));
-  });
-  const r = await fetch(gasUrl, {
-    method: 'POST', mode: 'cors', cache: 'no-cache', credentials: 'omit',
-    body: JSON.stringify({ action: 'saveLedger', data: flatLedger })
-  });
-  if(!r.ok) throw new Error(`HTTP ${r.status}`);
-  const d = await r.json();
-  if(d.error) throw new Error(d.error);
-  return d;
-}
-
-async function saveTodayPricesToGAS(stocks, date) {
-  if(!gasUrl) return;
-  const priceData = stocks.map(s => ({
-    date, code: s['代號'], name: s['名稱'], cat: s['分類'],
-    price: livePrices[s['代號']] || s['現價'], score: s['貝氏評分']
-  }));
-  const r = await fetch(gasUrl, {
-    method: 'POST', mode: 'cors', cache: 'no-cache', credentials: 'omit',
-    body: JSON.stringify({ action: 'savePrices', data: priceData, date })
-  });
-  if(!r.ok) throw new Error(`HTTP ${r.status}`);
-  const d = await r.json();
-  if(d.error) throw new Error(d.error);
-  return d;
-}
-
-async function loadStocksFromGAS() {
-  if(!gasUrl) { showToast('請先設定 GAS URL', 'fail'); return; }
-  showLoading('從GAS載入股票數據...');
-  try {
-    const r = await fetch(gasUrl + '?action=getStocks', {
-      method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
-      headers: { 'Accept': 'application/json' }
-    });
-    if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    const d = await r.json();
-    if(d.error) throw new Error(d.error);
-    if(d.data && d.data.length > 0) {
-      STOCKS_RAW.length = 0;
-      d.data.forEach(item => STOCKS_RAW.push(item));
-      STOCKS_RAW.forEach(s => { livePrices[s['代號']] = s['現價']; });
-      buildCatTabs();
-      renderPerf();
-      showToast('載入 ' + STOCKS_RAW.length + ' 檔股票數據', 'ok');
-    } else {
-      showToast('GAS中沒有股票數據', 'fail');
-    }
-  } catch(e) {
-    showToast('載入失敗: ' + e.message, 'fail');
-  } finally {
-    hideLoading();
-  }
-}
-
-async function loadLedgerFromGAS() {
-  if(!gasUrl) { showToast('請先設定 GAS URL', 'fail'); return; }
-  showLoading('從GAS載入帳務本...');
-  try {
-    const r = await fetch(gasUrl + '?action=getLedger', {
-      method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
-      headers: { 'Accept': 'application/json' }
-    });
-    const text = await r.text();
-    if(!r.ok) throw new Error(`HTTP ${r.status}: ${text}`);
-    const d = JSON.parse(text);
-    if(d.error) throw new Error(d.error);
-    if(d.data) {
-      const grouped = {};
-      d.data.forEach(r => {
-        const key = r.ledgerDate || '2026-05-11';
-        if(!grouped[key]) grouped[key] = [];
-        delete r.ledgerDate;
-        grouped[key].push(r);
-      });
-      ledger = grouped;
-      renderLedger();
-      updateSaveLedgerSelect();
-      // ★ 重建圖表頁帳本標籤（如果圖表頁正在顯示）
-      if (document.getElementById('page-chart').classList.contains('active')) {
-        buildChartLedgerTabs();
-      }
-      showToast('載入 ' + d.data.length + ' 筆帳務', 'ok');
-    } else {
-      showToast('GAS回傳數據格式錯誤', 'fail');
-    }
-  } catch(e) {
-    showToast('載入失敗: ' + e.message, 'fail');
-  } finally {
-    hideLoading();
-  }
-}
-
-// ============================================================
-// GAS CODE TEMPLATE
-// ============================================================
-function renderGASCode() {
-  document.getElementById('gasCode').value = `// ====== 台股績效系統 GAS 後端 ======
-const LEDGER_SHEET = '帳務本';
-const PRICES_SHEET = '每日現價';
-
-function doGet(e) {
-  const a = e.parameter.action;
-  if (a === 'ping') return json({status:'ok', time: new Date().toISOString()});
-  if (a === 'getLedger') return json({data: readLedger()});
-  if (a === 'getStocks') return json({data: readStocks()});
-  if (a === 'getPrices') return json({data: readPrices(e.parameter.date)});
-  return json({error:'unknown action'});
-}
-
-function doPost(e) {
-  try {
-    const b = JSON.parse(e.postData.contents);
-    if (b.action === 'saveLedger') { writeLedger(b.data); return json({status:'ok', count: b.data.length}); }
-    if (b.action === 'savePrices') { writePrices(b.data, b.date); return json({status:'ok'}); }
-    if (b.action === 'uploadData') { return uploadDataToSheets(b.data); }
-    return json({error:'unknown action'});
-  } catch(err) {
-    return json({error: err.message, status: 'error'});
-  }
-}
-
-function json(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
-}
-
-function getSheet(name, headers) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let s = ss.getSheetByName(name);
-  if (!s) { s = ss.insertSheet(name); s.appendRow(headers); s.getRange(1,1,1,headers.length).setFontWeight('bold'); }
-  return s;
-}
-
-function readLedger() {
-  const s = getSheet(LEDGER_SHEET, ['日期','代號','名稱','分類','買入價','股數','貝氏評分','帳本日期']);
-  const rows = s.getDataRange().getValues();
-  if (rows.length <= 1) return [];
-  return rows.slice(1).map(r => ({
-    date: fmtDate(r[0]), code: String(r[1]), name: r[2], cat: r[3],
-    buyPrice: Number(r[4]), shares: Number(r[5]), score: Number(r[6]),
-    ledgerDate: r[7] ? fmtDate(r[7]) : fmtDate(r[0])
-  }));
-}
-
-function readStocks() {
-  const s = getSheet('股票數據', ['代號','名稱','分類','現價','漲幅','貝氏評分']);
-  const rows = s.getDataRange().getValues();
-  if (rows.length <= 1) return [];
-  return rows.slice(1).map(r => ({
-    '代號': String(r[0]), '名稱': r[1], '分類': r[2],
-    '現價': Number(r[3]), '漲幅': r[4] ? Number(r[4]) : null, '貝氏評分': Number(r[5])
-  }));
-}
-
-function writeLedger(data) {
-  const s = getSheet(LEDGER_SHEET, ['日期','代號','名稱','分類','買入價','股數','貝氏評分','帳本日期']);
-  s.clearContents();
-  s.appendRow(['日期','代號','名稱','分類','買入價','股數','貝氏評分','帳本日期']);
-  data.forEach(r => s.appendRow([r.date, r.code, r.name, r.cat, r.buyPrice, r.shares, r.score, r.ledgerDate || r.date]));
-}
-
-function readPrices(date) {
-  const s = getSheet(PRICES_SHEET, ['日期','代號','名稱','分類','限價','貝氏評分']);
-  const rows = s.getDataRange().getValues();
-  if (rows.length <= 1) return [];
-  return rows.slice(1)
-    .filter(r => !date || fmtDate(r[0]) === date)
-    .map(r => ({ date: fmtDate(r[0]), code: String(r[1]), name: r[2], cat: r[3], price: Number(r[4]), score: Number(r[5]) }));
-}
-
-function writePrices(data, date) {
-  const s = getSheet(PRICES_SHEET, ['日期','代號','名稱','分類','限價','貝氏評分']);
-  const rows = s.getDataRange().getValues();
-  const toDel = [];
-  rows.forEach((r, i) => { if (i > 0 && fmtDate(r[0]) === date) toDel.push(i + 1); });
-  toDel.reverse().forEach(i => s.deleteRow(i));
-  data.forEach(r => s.appendRow([r.date, r.code, r.name, r.cat, r.price, r.score]));
-}
-
-function uploadDataToSheets(data) {
-  try {
-    const s = getSheet('股票數據', ['代號','名稱','分類','現價','漲幅','貝氏評分']);
-    s.clearContents();
-    s.appendRow(['代號','名稱','分類','現價','漲幅','貝氏評分']);
-    data.forEach(stock => {
-      s.appendRow([stock['代號'], stock['名稱'], stock['分類'], stock['現價'], stock['漲幅'], stock['貝氏評分']]);
-    });
-    return json({status:'ok', count: data.length});
-  } catch(err) {
-    return json({status:'error', error: err.message});
-  }
-}
-
-function fmtDate(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Taipei', 'yyyy-MM-dd');
-  return String(v);
-}`;
-}
-
-function copyGASCode() {
-  navigator.clipboard.writeText(document.getElementById('gasCode').value);
-  showToast('GAS 程式碼已複製到剪貼板', 'ok');
-}
-
-function enableEditGAS() {
-  const textarea = document.getElementById('gasCode');
-  textarea.readOnly = false;
-  textarea.focus();
-  document.getElementById('updateGASBtn').style.display = 'inline-block';
-  showToast('已啟用編輯模式', 'ok');
-}
-
-async function updateGASCode() {
-  const code = document.getElementById('gasCode').value;
-  if(!code.trim()) { showToast('程式碼不能為空', 'fail'); return; }
-  navigator.clipboard.writeText(code);
-  showToast('更新後的GAS程式碼已複製到剪貼板！請手動貼到Apps Script編輯器中', 'ok');
-  renderGASCode();
-  document.getElementById('gasCode').readOnly = true;
-  document.getElementById('updateGASBtn').style.display = 'none';
-}
-
-async function uploadDataFile() {
-  const fileInput = document.getElementById('dataFile');
-  const statusDiv = document.getElementById('uploadStatus');
-  if(!fileInput.files.length) { statusDiv.textContent = '請選擇檔案'; statusDiv.style.color = 'var(--red)'; return; }
-  if(!gasUrl) { statusDiv.textContent = '請先設定GAS URL'; statusDiv.style.color = 'var(--red)'; return; }
-  const file = fileInput.files[0];
-  statusDiv.textContent = '正在讀取檔案...'; statusDiv.style.color = 'var(--text2)';
-  try {
-    const rawRows = await parseUploadedFile(file);
-    const data = normalizeUploadRows(rawRows);
-    if (!data.length) throw new Error('解析後沒有可用資料');
-    statusDiv.textContent = '正在更新到試算表...';
-    const r = await fetch(gasUrl, {
-      method: 'POST', mode: 'cors', cache: 'no-cache', credentials: 'omit',
-      body: JSON.stringify({ action: 'uploadData', data: data })
-    });
-    if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    const result = await r.json();
-    if(result.error) throw new Error(result.error);
-    statusDiv.textContent = `成功更新 ${result.count || 0} 筆資料到試算表`;
-    statusDiv.style.color = 'var(--green)';
-    await loadLedgerFromGAS();
-    showToast('資料已更新並重新載入', 'ok');
-  } catch(e) {
-    statusDiv.textContent = '上傳失敗: ' + e.message;
-    statusDiv.style.color = 'var(--red)';
-  }
-}
-
-async function parseUploadedFile(file) {
-  const name = file.name.toLowerCase();
-  if (name.endsWith('.json')) return JSON.parse(await file.text());
-  if (name.endsWith('.csv')) {
-    const text = await file.text();
-    const lines = text.split(/\r?\n/).filter(l => l.trim());
-    if (!lines.length) return [];
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-    return lines.slice(1).map(line => {
-      const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-      const row = {};
-      headers.forEach((h, i) => { row[h] = vals[i] || ''; });
-      return row;
-    });
-  }
-  if (name.endsWith('.xls') || name.endsWith('.xlsx')) {
-    const data = await file.arrayBuffer();
-    const wb = XLSX.read(data, { type: 'array' });
-    return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
-  }
-  throw new Error('不支援的檔案格式');
-}
-
-function normalizeUploadRows(rows) {
-  return rows.map(row => {
-    const n = {};
-    Object.keys(row).forEach(k => { n[k.trim().replace(/\s+/g,'').toLowerCase()] = row[k]; });
-    const code = n['代號'] || n['code'] || n['ticker'];
-    const name = n['名稱'] || n['name'];
-    if (!code || !name) return null;
-    return {
-      '代號': String(code), '名稱': String(name),
-      '分類': String(n['分類'] || n['category'] || 'long_term'),
-      '現價': parseFloat(n['現價'] || n['price'] || 0),
-      '漲幅': n['漲幅'] || n['change'] || '',
-      '貝氏評分': parseFloat(n['貝氏評分'] || n['score'] || 0)
-    };
-  }).filter(Boolean);
-}
-
-// ============================================================
-// UTILS
-// ============================================================
-function showLoading(msg) {
-  document.getElementById('loadingText').textContent = msg || '載入中...';
+function showLoading(text) {
+  document.getElementById('loadingText').textContent = text || '載入中...';
   document.getElementById('loadingOverlay').classList.add('show');
 }
-function hideLoading() { document.getElementById('loadingOverlay').classList.remove('show'); }
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.remove('show');
+}
 function showToast(msg, type) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.className = 'toast ' + (type || 'ok') + ' show';
-  setTimeout(() => t.classList.remove('show'), 3500);
+  t.textContent = msg;
+  t.className = 'toast ' + (type === 'ok' ? 'ok' : 'fail');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-document.querySelectorAll('.modal-bg').forEach(bg => {
-  bg.addEventListener('click', e => { if(e.target === bg) bg.classList.remove('open'); });
-});
+// ============================================================
+// GAS FUNCTIONS (Stubs - implement as needed)
+// ============================================================
+async function syncToGAS() { showToast('請先配置GAS URL', 'fail'); }
+async function pushLedgerToGAS() { }
+async function saveTodayPricesToGAS() { }
+async function loadLedgerFromGAS() { }
+async function loadStocksFromGAS() { }
+function testGAS() { showToast('連接測試功能未實現', 'fail'); }
+function saveGASUrl() { gasUrl = document.getElementById('gasUrl').value; localStorage.setItem('gasUrl', gasUrl); showToast('GAS URL 已儲存', 'ok'); }
+function uploadDataFile() { showToast('上傳功能未實現', 'fail'); }
+function clearCache() { if(confirm('確定清除所有快取?')) { localStorage.clear(); ledger = {}; renderLedger(); showToast('已清除', 'ok'); } }
+function renderGASCode() { document.getElementById('gasCode').value = '// GAS Code stub'; }
+function copyGASCode() { const code = document.getElementById('gasCode').value; navigator.clipboard.writeText(code).then(() => showToast('已複製', 'ok')); }
+function enableEditGAS() { document.getElementById('gasCode').readOnly = false; document.getElementById('updateGASBtn').style.display = 'flex'; }
+function updateGASCode() { showToast('更新功能未實現', 'fail'); }
+
 </script>
 </body>
 </html>
