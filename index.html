@@ -1891,9 +1891,15 @@ function getBatchPrices(codes) {
         const data = JSON.parse(res.getContentText());
         (data.msgArray || []).forEach(item => {
           const code = item.c;
-          const z = item.z;
-          if (code && z && z !== '-') {
-            const p = parseFloat(z);
+          // z = 即時成交價，非交易時間為 '-'
+          // pz = 昨日收盤價，隨時都有值
+          // y = 昨日收盤（備用）
+          const price = (item.z && item.z !== '-') ? item.z
+                      : (item.pz && item.pz !== '-') ? item.pz
+                      : (item.y && item.y !== '-') ? item.y
+                      : null;
+          if (code && price) {
+            const p = parseFloat(price);
             if (p > 0) result[code] = p;
           }
         });
@@ -1926,8 +1932,12 @@ function updateAllPrices() {
       if (res.getResponseCode() === 200) {
         const data = JSON.parse(res.getContentText());
         (data.msgArray || []).forEach(item => {
-          if (item.c && item.z && item.z !== '-') {
-            allPrices[item.c] = { price: parseFloat(item.z), name: item.n || '', time: item.t || '' };
+          const price = (item.z && item.z !== '-') ? item.z
+                      : (item.pz && item.pz !== '-') ? item.pz
+                      : (item.y && item.y !== '-') ? item.y
+                      : null;
+          if (item.c && price) {
+            allPrices[item.c] = { price: parseFloat(price), name: item.n || '', time: item.t || '' };
           }
         });
       }
