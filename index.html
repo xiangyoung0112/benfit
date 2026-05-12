@@ -240,10 +240,8 @@ tbody td{padding:8px 12px;vertical-align:middle;}
       </div>
     </div>
 
-    <select id="saveLedgerSelect"></select>
-    <button class="btn ghost" onclick="openAddLedgerModal()">＋ 新增帳本</button>
     <button class="btn green" onclick="fetchLivePrices()">🔄 更新現價</button>
-    <button class="btn" onclick="saveTodayToGAS()">💾 存今日帳本</button>
+    <button class="btn" onclick="saveAllToTodayLedger()">📥 全部匯入今日帳本</button>
   </div>
   <div class="table-wrap" style="max-height:calc(100vh - 320px);">
     <table id="perfTable">
@@ -777,22 +775,31 @@ function addOneLedger(code, name, cat, price, score) {
   showToast('已加入 '+name+' 到'+targetDate+'帳本（需點「☁️ 同步GAS」以保存）','ok');
 }
 
-async function saveTodayToGAS() {
-  const targetDate = document.getElementById('saveLedgerSelect').value;
-  const data = getFilteredStocks();
+// 全部匯入今日帳本（替換舊的 saveTodayToGAS）
+async function saveAllToTodayLedger() {
   const today = new Date().toISOString().split('T')[0];
-  let added = 0;
-  if(!ledger[targetDate]) ledger[targetDate] = [];
+  if(!ledger[today]) ledger[today] = [];
+  currentLedgerDate = today;
+  const data = getFilteredStocks();
+  let added = 0, skipped = 0;
   data.forEach(s => {
     const shares = calcShares(s['現價']);
-    if(shares>0 && !ledger[targetDate].find(r=>r.code===s['代號']&&r.date===today)) {
-      ledger[targetDate].push({ date:today, code:s['代號'], name:s['名稱'], cat:s['分類'], buyPrice:s['現價'], shares, score:s['貝氏評分'] });
-      added++;
-    }
+    if(shares <= 0) { skipped++; return; }
+    if(ledger[today].find(r => r.code === s['代號'] && r.date === today)) { skipped++; return; }
+    ledger[today].push({ date:today, code:s['代號'], name:s['名稱'], cat:s['分類'],
+      buyPrice: livePrices[s['代號']] || s['現價'], shares, score:s['貝氏評分'] });
+    added++;
   });
   renderLedgerTabs();
-  showToast('已加入 '+added+' 檔到'+targetDate+'帳本（需點「☁️ 同步GAS」以保存）','ok');
+  updateSaveLedgerSelect();
+  showToast(`✓ 已匯入 ${added} 檔到今日帳本（跳過 ${skipped}）`, 'ok');
+  if(gasUrl) enqueuSync(()=>pushLedgerToGAS(), '同步今日帳本...');
 }
+
+// 保留舊名稱相容
+async function saveTodayToGAS() { return saveAllToTodayLedger(); }
+
+
 
 function setPeriod(p, btn) {
   currentPeriod = p;
@@ -916,13 +923,13 @@ function deleteLedger(ledgerDate, idx) {
 }
 
 function updateSaveLedgerSelect() {
+  // saveLedgerSelect removed; kept for compatibility
   const select = document.getElementById('saveLedgerSelect');
-  const curVal = select.value;
+  if(!select) return;
   const today = new Date().toISOString().split('T')[0];
   const dates = [...new Set([...Object.keys(ledger), today])].sort().reverse();
   select.innerHTML = dates.map(d => `<option value="${d}">${formatDateLabel(d)}</option>`).join('');
-  if(dates.includes(curVal)) select.value = curVal;
-  else select.value = today;
+  select.value = today;
 }
 
 function openAddManual() { document.getElementById('addModal').classList.add('open'); }
@@ -1025,9 +1032,7 @@ function applyManualPrices() {
 }
 
 // ============================================================
-// LIVE PRICE UPDATE - 批量並列抓取 (BATCH PARALLEL - 方案A)
-// 原本：逐檔串列 + 120ms 延遲 → 50檔約 6秒以上
-// 優化後：5檔一批並列 + 80ms 批次間延遲 → 50檔約 1-2秒
+// LIVE PRICE UPDATE — GAS 批量優先，fallback CORS Proxy 逐檔
 // ============================================================
 
 function showProgress(current, total) {
@@ -1088,7 +1093,6 @@ function onProxyModeChange() {
   const mode = document.getElementById('proxyMode')?.value;
   const wrap = document.getElementById('customProxyWrap');
   if(wrap) wrap.style.display = (mode === 'custom') ? 'flex' : 'none';
-  // update header badge
   const badge = document.getElementById('proxyBadge');
   if(badge) {
     const labels = {gas:'🌐 GAS代理', allorigins:'🌐 allorigins代理', corsproxy:'🌐 corsproxy代理', custom:'🌐 自訂代理'};
@@ -1098,7 +1102,7 @@ function onProxyModeChange() {
 
 function buildProxyUrl(targetUrl) {
   const mode = document.getElementById('proxyMode')?.value || proxyMode;
-  if(mode === 'gas') return null; // handled separately
+  if(mode === 'gas') return null;
   if(mode === 'allorigins') return `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
   if(mode === 'corsproxy') return `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
   if(mode === 'custom') {
@@ -1113,245 +1117,130 @@ async function testProxy() {
   const statusText = document.getElementById('proxyStatusText');
   statusDot.className = 'status-dot';
   statusText.textContent = '測試中...';
-
   const mode = document.getElementById('proxyMode').value;
   if(mode === 'gas') {
-    // test via GAS
     const url = document.getElementById('gasUrl').value.trim() || gasUrl;
     if(!url) { statusDot.className='status-dot err'; statusText.textContent='請先設定 GAS URL'; return; }
     try {
-      showLoading('測試 GAS 代理...');
-      const r = await fetch(`${url}?action=getPrice&code=2330`);
+      showLoading('測試 GAS 批量代理...');
+      const r = await fetch(url, {method:'POST', mode:'cors', cache:'no-cache', credentials:'omit',
+        body: JSON.stringify({action:'getBatchPrices', codes:['2330']})});
       const d = await r.json();
       hideLoading();
-      if(d.price && d.price > 0) {
+      if(d.prices && d.prices['2330'] > 0) {
         statusDot.className='status-dot ok';
-        statusText.textContent=`GAS代理 OK！台積電現價: ${d.price}`;
+        statusText.textContent=`GAS批量代理 OK！台積電現價: ${d.prices['2330']}`;
       } else {
         statusDot.className='status-dot err';
-        statusText.textContent='GAS回應但無法取得現價，請確認GAS程式碼已部署';
+        statusText.textContent='GAS回應但無法取得現價，請更新GAS程式碼';
       }
     } catch(e) { hideLoading(); statusDot.className='status-dot err'; statusText.textContent='連線失敗: '+e.message; }
     return;
   }
-
-  // Test with a known stock (2330 TSMC)
   const testUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=tse_2330.tw`;
   const proxyUrl = buildProxyUrl(testUrl);
   if(!proxyUrl) { statusDot.className='status-dot err'; statusText.textContent='無法建立 Proxy URL'; return; }
-  
   try {
-    showLoading('測試 Proxy 連線...');
+    showLoading('測試 Proxy...');
     const res = await fetchWithTimeout(proxyUrl, 12000);
     const text = await res.text();
     const d = JSON.parse(text);
     hideLoading();
     const z = d.msgArray?.[0]?.z;
-    if(z && z !== '-') {
-      statusDot.className='status-dot ok';
-      statusText.textContent=`Proxy OK！台積電現價: ${z}`;
-    } else {
-      statusDot.className='status-dot err';
-      statusText.textContent='Proxy回應但無現價資料（非交易時間？）';
-    }
-  } catch(e) {
-    hideLoading();
-    statusDot.className='status-dot err';
-    statusText.textContent='Proxy 失敗: '+e.message;
-  }
+    if(z && z !== '-') { statusDot.className='status-dot ok'; statusText.textContent=`Proxy OK！台積電: ${z}`; }
+    else { statusDot.className='status-dot err'; statusText.textContent='Proxy OK 但無現價（非交易時間？）'; }
+  } catch(e) { hideLoading(); statusDot.className='status-dot err'; statusText.textContent='Proxy 失敗: '+e.message; }
 }
 
 // ============================================================
-// LIVE PRICE FETCH - via GAS proxy or CORS proxy
+// LIVE PRICE FETCH — GAS 批量 + CORS Proxy fallback
 // ============================================================
 
-async function fetchOneLivePriceViaGAS(code) {
+// GAS 批量查詢：一次送所有代號，GAS 回傳 {prices:{代號:price,...}}
+async function fetchBatchPricesViaGAS(codes) {
   if(!gasUrl) return null;
   try {
-    const r = await fetchWithTimeout(`${gasUrl}?action=getPrice&code=${code}`, 12000);
+    const r = await fetch(gasUrl, {
+      method: 'POST', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+      body: JSON.stringify({ action: 'getBatchPrices', codes })
+    });
     if(!r.ok) return null;
     const d = await r.json();
-    if(d.price && d.price > 0) return d.price;
-  } catch(e) {}
+    if(d.prices) return d.prices;
+  } catch(e) { console.warn('GAS批量查詢失敗:', e.message); }
   return null;
 }
 
-async function fetchOneLivePrice(code) {
-  console.log(`🔍 開始查詢: ${code}`);
-  const mode = document.getElementById('proxyMode')?.value || proxyMode;
-
-  // GAS mode: delegate to GAS
-  if(mode === 'gas') {
-    if(gasUrl) {
-      const price = await fetchOneLivePriceViaGAS(code);
-      if(price) { console.log(`  ✓ GAS代理: ${code} = ${price}`); return price; }
-      console.warn(`  ✗ GAS代理失敗，改用直連...`);
-    }
-  }
-
-  // Try direct or proxied
+async function fetchOneLivePriceProxy(code) {
   for(let attempt = 0; attempt < 2; attempt++) {
-    const isOTC = attempt === 1;
-    const exchange = isOTC ? 'otc' : 'tse';
+    const exchange = attempt === 1 ? 'otc' : 'tse';
     const targetUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=5&ex_ch=${exchange}_${code}.tw`;
-    
-    let url;
-    if(mode === 'gas') {
-      // GAS already failed, try direct
-      url = targetUrl;
-    } else {
-      url = buildProxyUrl(targetUrl) || targetUrl;
-    }
-
+    const url = buildProxyUrl(targetUrl) || targetUrl;
     try {
-      console.debug(`  [${attempt + 1}/2] 嘗試 ${exchange.toUpperCase()}${mode !== 'gas' ? ' (proxy)' : ''}...`);
       const res = await fetchWithTimeout(url, 10000);
-      if(!res.ok) { console.debug(`  ✗ HTTP ${res.status}`); continue; }
-      const text = await res.text();
-      const d = JSON.parse(text);
-      if(!d.msgArray || d.msgArray.length === 0) { console.debug(`  ✗ 無資料`); continue; }
-      const z = d.msgArray[0].z;
-      if(z && z !== '-' && z !== '') {
-        const price = parseFloat(z);
-        if(price > 0) {
-          console.log(`  ✓ ${exchange.toUpperCase()} 查詢成功: ${code} = ${price}`);
-          return price;
-        }
-      }
-      console.debug(`  ✗ 價格無效: ${z}`);
-    } catch(e) {
-      console.debug(`  ✗ ${exchange.toUpperCase()} 錯誤: ${e.message}`);
-    }
+      if(!res.ok) continue;
+      const d = JSON.parse(await res.text());
+      const z = d.msgArray?.[0]?.z;
+      if(z && z !== '-' && z !== '') { const p = parseFloat(z); if(p > 0) return p; }
+    } catch(e) {}
   }
-  
-  console.warn(`❌ 無法查詢 ${code}`);
   return null;
 }
 
-
+async function _runBatchOrProxy(codes, label) {
+  const mode = document.getElementById('proxyMode')?.value || proxyMode;
+  // === GAS 批量優先 ===
+  if(mode === 'gas' && gasUrl) {
+    showLoading(`透過 GAS 批量查詢 ${codes.length} 檔...`);
+    const prices = await fetchBatchPricesViaGAS(codes);
+    hideLoading();
+    if(prices) {
+      let updated = 0;
+      codes.forEach(c => { if(prices[c] > 0) { livePrices[c] = prices[c]; updated++; } });
+      livePriceTimestamp = Date.now();
+      showToast(`✓ GAS批量：${updated}/${codes.length} 檔更新`, updated > 0 ? 'ok' : 'fail');
+      renderPerf(); renderLedger(); return;
+    }
+    showToast('GAS批量失敗，改逐檔查詢...', 'fail');
+  }
+  // === CORS Proxy 逐檔 fallback ===
+  showLoading(`逐檔查詢 0/${codes.length}...`);
+  showProgress(0, codes.length);
+  let updated = 0, done = 0;
+  for(let i = 0; i < codes.length; i += 4) {
+    const batch = codes.slice(i, i+4);
+    await Promise.allSettled(batch.map(async code => {
+      const p = await fetchOneLivePriceProxy(code);
+      if(p) { livePrices[code] = p; updated++; }
+    }));
+    done = Math.min(i+4, codes.length);
+    showProgress(done, codes.length);
+    document.getElementById('loadingText').textContent = `逐檔查詢... ${done}/${codes.length} ✓${updated}`;
+    if(i+4 < codes.length) await new Promise(r => setTimeout(r, 250));
+  }
+  livePriceTimestamp = Date.now();
+  hideProgress(); hideLoading();
+  const msg = updated===codes.length?`✓ 全部 ${updated} 檔成功`:
+    updated>0?`⚠️ 部分成功 ${updated}/${codes.length}`:'✗ 全部失敗，請設定代理';
+  showToast(msg, updated > 0 ? 'ok' : 'fail');
+  renderPerf(); renderLedger();
+}
 
 async function fetchLivePrices() {
-  const visible = getFilteredStocks().slice(0, 60);
-  const codes = visible.map(s => s['代號']);
-  if(codes.length === 0) { showToast('沒有股票可更新', 'fail'); return; }
-
-  showLoading(`更新現價中... 0/${codes.length}`);
-  showProgress(0, codes.length);
-
-  const BATCH = 2;       // 每批只查 2 檔
-  const DELAY_MS = 500;   // 批次間隔增加到 500ms
-  let updated = 0;
-  let failed = [];
-  let done = 0;
-
-  console.log(`=== 開始查詢 ${codes.length} 檔股票現價 ===`);
-
-  for(let i = 0; i < codes.length; i += BATCH) {
-    const batch = codes.slice(i, i + BATCH);
-
-    const results = await Promise.allSettled(
-      batch.map(async code => {
-        try {
-          const price = await fetchOneLivePrice(code);
-          if(price !== null) { 
-            livePrices[code] = price; 
-            updated++; 
-          } else {
-            failed.push(code);
-          }
-        } catch(e) {
-          failed.push(code);
-          console.error(`查詢異常 ${code}:`, e.message);
-        }
-      })
-    );
-
-    done = Math.min(i + BATCH, codes.length);
-    showProgress(done, codes.length);
-    document.getElementById('loadingText').textContent = `更新現價中... ${done}/${codes.length} (成功: ${updated})`;
-
-    if(i + BATCH < codes.length) {
-      await new Promise(r => setTimeout(r, DELAY_MS));
-    }
-  }
-
-  livePriceTimestamp = Date.now();
-  hideProgress();
-  hideLoading();
-  
-  console.log(`=== 查詢完成: 成功 ${updated}/${codes.length} 檔 ===`);
-  if(failed.length > 0) {
-    console.warn(`失敗股票 (${failed.length}): `, failed.join(', '));
-  }
-  
-  let msg;
-  if(updated === codes.length) {
-    msg = `✓ 全部 ${updated} 檔現價更新成功`;
-  } else if(updated > 0) {
-    msg = `⚠️ 部分成功: ${updated}/${codes.length} 檔更新 (${failed.length}檔失敗)`;
-  } else {
-    msg = `✗ 現價查詢全部失敗，請檢查網路連線或手動輸入`;
-  }
-  
-  showToast(msg, updated > 0 ? 'ok' : 'fail');
-  renderPerf();
-  renderLedger();
+  const codes = getFilteredStocks().map(s => s['代號']);
+  if(!codes.length) { showToast('沒有股票', 'fail'); return; }
+  await _runBatchOrProxy(codes, '績效');
 }
 
 async function fetchLivePricesForLedger() {
-  if(!currentLedgerDate || !ledger[currentLedgerDate] || ledger[currentLedgerDate].length === 0) {
-    showToast('帳本是空的', 'fail'); return;
-  }
-
+  if(!(ledger[currentLedgerDate]||[]).length) { showToast('帳本是空的', 'fail'); return; }
   const codes = [...new Set(ledger[currentLedgerDate].map(r => r.code))];
-  showLoading(`更新 ${codes.length} 檔現價...`);
-  showProgress(0, codes.length);
-
-  const BATCH = 3;
-  const DELAY_MS = 200;
-  let updated = 0;
-  let failed = [];
-  let done = 0;
-
-  console.log(`開始查詢帳本 ${codes.length} 檔股票現價...`);
-
-  for(let i = 0; i < codes.length; i += BATCH) {
-    const batch = codes.slice(i, i + BATCH);
-
-    await Promise.allSettled(
-      batch.map(async code => {
-        try {
-          const price = await fetchOneLivePrice(code);
-          if(price !== null) { 
-            livePrices[code] = price; 
-            updated++; 
-          } else {
-            failed.push(code);
-          }
-        } catch(e) {
-          failed.push(code);
-        }
-      })
-    );
-
-    done = Math.min(i + BATCH, codes.length);
-    showProgress(done, codes.length);
-    document.getElementById('loadingText').textContent = `更新現價中... ${done}/${codes.length} (成功: ${updated})`;
-
-    if(i + BATCH < codes.length) {
-      await new Promise(r => setTimeout(r, DELAY_MS));
-    }
-  }
-
-  livePriceTimestamp = Date.now();
-  hideProgress();
-  hideLoading();
-  
-  console.log(`帳本查詢完成: 成功${updated}檔，失敗${failed.length}檔`);
-  const msg = updated > 0 ? `已更新 ${updated}/${codes.length} 檔現價` : '現價查詢失敗，請檢查網路';
-  showToast(msg, updated > 0 ? 'ok' : 'fail');
-  renderLedger();
+  await _runBatchOrProxy(codes, '帳本');
 }
+
+async function fetchOneLivePrice(code) { return fetchOneLivePriceProxy(code); }
+
+
 
 // ============================================================
 // EXPORT
@@ -1909,101 +1798,192 @@ function normalizeUploadRows(rows) {
 // GAS CODE
 // ============================================================
 function renderGASCode() {
-  document.getElementById('gasCode').value = `// ====== 台股績效系統 GAS 後端 ======
-// GAS 負責：帳務本管理 + 現價查詢
-const LEDGER_SHEET = '帳務本';
-const PRICES_SHEET = '每日現價';
+  document.getElementById('gasCode').value = `// ====== 台股績效系統 GAS 後端 v2 ======
+// 功能：
+//   1. getBatchPrices  — 批量查詢現價（POST），回傳 {prices:{代號:price}}
+//   2. getLedger       — 讀所有帳本（GET）
+//   3. saveLedger      — 存帳本，每個日期獨立工作表（POST）
+//   4. ping            — 連線測試（GET）
+//   5. updateAllPrices — 更新全台股現價工作表（GET/觸發器）
+//
+// 部署：執行身份「以我的身份」、存取「任何人」
+// 觸發器：可設 updateAllPrices 每日09:30自動執行
 
+const PRICE_SHEET   = '全台股現價';   // 所有股票現價（GAS自動更新）
+const LEDGER_PREFIX = '帳本_';       // 每個帳本日期一張工作表
+
+// ─── 路由 ───────────────────────────────────────────────────
 function doGet(e) {
   const a = e.parameter.action;
-  if (a === 'ping') return json({status:'ok', time: new Date().toISOString()});
-  if (a === 'getLedger') return json({data: readLedger()});
-  if (a === 'getPrice') return json({price: getLivePrice(e.parameter.code)});
-  if (a === 'getPrices') return json({data: readPrices(e.parameter.date)});
+  if (a === 'ping')            return json({status:'ok', time: new Date().toISOString()});
+  if (a === 'getLedger')       return json({data: readAllLedgers()});
+  if (a === 'updateAllPrices') { updateAllPrices(); return json({status:'ok'}); }
   return json({error:'unknown action'});
 }
 
 function doPost(e) {
   try {
     const b = JSON.parse(e.postData.contents);
-    if (b.action === 'saveLedger') { writeLedger(b.data); return json({status:'ok', count: b.data.length}); }
-    if (b.action === 'savePrices') { writePrices(b.data, b.date); return json({status:'ok'}); }
+    if (b.action === 'getBatchPrices') return json({prices: getBatchPrices(b.codes || [])});
+    if (b.action === 'saveLedger')     return json({status:'ok', count: writeLedgerSheet(b.date, b.data)});
     return json({error:'unknown action'});
   } catch(err) {
-    return json({error: err.message, status: 'error'});
+    return json({error: err.message});
   }
 }
 
 function json(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
-// 查詢單檔股票現價（通過台灣證券交易所 API）
-function getLivePrice(code) {
-  try {
-    const tseUrl = \`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=tse_\${code}.tw\`;
-    const res = UrlFetchApp.fetch(tseUrl, {muteHttpExceptions: true});
-    if (res.getResponseCode() === 200) {
-      const data = JSON.parse(res.getContentText());
-      const z = data.msgArray?.[0]?.z;
-      if (z && z !== '-') return parseFloat(z);
-    }
-  } catch(e) {}
-  
-  // 如果 TSE 失敗，嘗試 OTC
-  try {
-    const otcUrl = \`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=otc_\${code}.tw\`;
-    const res = UrlFetchApp.fetch(otcUrl, {muteHttpExceptions: true});
-    if (res.getResponseCode() === 200) {
-      const data = JSON.parse(res.getContentText());
-      const z = data.msgArray?.[0]?.z;
-      if (z && z !== '-') return parseFloat(z);
-    }
-  } catch(e) {}
-  
-  return null;
+// ─── 批量現價查詢 ────────────────────────────────────────────
+// 優先從「全台股現價」工作表取快取；若無則即時查詢
+function getBatchPrices(codes) {
+  const cached = readPriceSheet();
+  const result = {};
+  const needFetch = [];
+
+  codes.forEach(code => {
+    if (cached[code]) result[code] = cached[code];
+    else needFetch.push(code);
+  });
+
+  // 即時查詢未快取的
+  if (needFetch.length > 0) {
+    // 每次最多查 20 檔（避免逾時）
+    const chunk = needFetch.slice(0, 20);
+    const ex_ch = chunk.map(c => \`tse_\${c}.tw|\`).join('') +
+                  chunk.map(c => \`otc_\${c}.tw|\`).join('');
+    try {
+      const url = \`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=\${ex_ch}\`;
+      const res = UrlFetchApp.fetch(url, {muteHttpExceptions: true});
+      if (res.getResponseCode() === 200) {
+        const data = JSON.parse(res.getContentText());
+        (data.msgArray || []).forEach(item => {
+          const code = item.c;
+          const z = item.z;
+          if (code && z && z !== '-') {
+            const p = parseFloat(z);
+            if (p > 0) result[code] = p;
+          }
+        });
+      }
+    } catch(e) {}
+  }
+  return result;
 }
 
-function getSheet(name, headers) {
+// ─── 全台股現價表（可設觸發器自動執行）──────────────────────
+function updateAllPrices() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let s = ss.getSheetByName(name);
-  if (!s) { s = ss.insertSheet(name); s.appendRow(headers); s.getRange(1,1,1,headers.length).setFontWeight('bold'); }
-  return s;
-}
+  let s = ss.getSheetByName(PRICE_SHEET);
+  if (!s) { s = ss.insertSheet(PRICE_SHEET); }
 
-function readLedger() {
-  const s = getSheet(LEDGER_SHEET, ['ledgerDate','日期','代號','名稱','分類','買入價','股數','貝氏評分']);
-  const rows = s.getDataRange().getValues();
-  if (rows.length <= 1) return [];
-  return rows.slice(1).map(r => ({
-    ledgerDate: String(r[0]), date: fmtDate(r[1]), code: String(r[2]), name: r[3], cat: r[4],
-    buyPrice: Number(r[5]), shares: Number(r[6]), score: Number(r[7])
-  }));
-}
+  // 分批查詢所有上市/上櫃股票
+  // 你可以把需要追蹤的代號放在下方陣列，或直接從其他工作表讀取
+  const codes = getAllTrackedCodes();
+  if (codes.length === 0) return;
 
-function writeLedger(data) {
-  const s = getSheet(LEDGER_SHEET, ['ledgerDate','日期','代號','名稱','分類','買入價','股數','貝氏評分']);
+  const CHUNK = 50;
+  const allPrices = {};
+  for (let i = 0; i < codes.length; i += CHUNK) {
+    const chunk = codes.slice(i, i + CHUNK);
+    const ex_ch = chunk.map(c => \`tse_\${c}.tw|\`).join('') +
+                  chunk.map(c => \`otc_\${c}.tw|\`).join('');
+    try {
+      const url = \`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=\${ex_ch}\`;
+      const res = UrlFetchApp.fetch(url, {muteHttpExceptions: true});
+      if (res.getResponseCode() === 200) {
+        const data = JSON.parse(res.getContentText());
+        (data.msgArray || []).forEach(item => {
+          if (item.c && item.z && item.z !== '-') {
+            allPrices[item.c] = { price: parseFloat(item.z), name: item.n || '', time: item.t || '' };
+          }
+        });
+      }
+    } catch(e) {}
+    Utilities.sleep(300);
+  }
+
+  // 寫入工作表
+  const now = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
   s.clearContents();
-  s.appendRow(['ledgerDate','日期','代號','名稱','分類','買入價','股數','貝氏評分']);
-  data.forEach(r => s.appendRow([r.ledgerDate||r.date, r.date, r.code, r.name, r.cat, r.buyPrice, r.shares, r.score]));
+  s.appendRow(['代號', '名稱', '現價', '更新時間']);
+  s.getRange(1,1,1,4).setFontWeight('bold').setBackground('#f5e6d3');
+  Object.entries(allPrices).forEach(([code, info]) => {
+    s.appendRow([code, info.name, info.price, now]);
+  });
 }
 
-function readPrices(date) {
-  const s = getSheet(PRICES_SHEET, ['日期','代號','名稱','分類','限價','貝氏評分']);
-  const rows = s.getDataRange().getValues();
-  if (rows.length <= 1) return [];
-  return rows.slice(1)
-    .filter(r => !date || fmtDate(r[0]) === date)
-    .map(r => ({date: fmtDate(r[0]), code: String(r[1]), name: r[2], cat: r[3], price: Number(r[4]), score: Number(r[5])}));
+// 從所有帳本工作表收集追蹤代號
+function getAllTrackedCodes() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const codeSet = new Set();
+  ss.getSheets().forEach(sheet => {
+    if (!sheet.getName().startsWith(LEDGER_PREFIX)) return;
+    const vals = sheet.getDataRange().getValues();
+    vals.slice(1).forEach(r => { if (r[2]) codeSet.add(String(r[2])); });
+  });
+  return [...codeSet];
 }
 
-function writePrices(data, date) {
-  const s = getSheet(PRICES_SHEET, ['日期','代號','名稱','分類','限價','貝氏評分']);
+// 讀全台股現價工作表，回傳 {代號: price}
+function readPriceSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const s = ss.getSheetByName(PRICE_SHEET);
+  if (!s) return {};
   const rows = s.getDataRange().getValues();
-  const toDel = [];
-  rows.forEach((r, i) => { if (i > 0 && fmtDate(r[0]) === date) toDel.push(i + 1); });
-  toDel.reverse().forEach(i => s.deleteRow(i));
-  data.forEach(r => s.appendRow([r.date, r.code, r.name, r.cat, r.price, r.score]));
+  const result = {};
+  rows.slice(1).forEach(r => {
+    if (r[0] && r[2]) result[String(r[0])] = Number(r[2]);
+  });
+  return result;
+}
+
+// ─── 帳本（每個日期獨立工作表）──────────────────────────────
+const LEDGER_HEADERS = ['date','code','name','cat','buyPrice','shares','score'];
+
+function writeLedgerSheet(date, data) {
+  if (!date || !data) return 0;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetName = LEDGER_PREFIX + date;
+  let s = ss.getSheetByName(sheetName);
+  if (!s) {
+    s = ss.insertSheet(sheetName);
+  }
+  s.clearContents();
+  s.appendRow(['日期','代號','名稱','分類','買入價','股數','貝氏評分']);
+  const hdr = s.getRange(1,1,1,7);
+  hdr.setFontWeight('bold').setBackground('#f5e6d3').setFontColor('#3d2b1a');
+  data.forEach(r => {
+    s.appendRow([r.date||date, r.code, r.name, r.cat, r.buyPrice, r.shares, r.score]);
+  });
+  return data.length;
+}
+
+function readAllLedgers() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const result = [];
+  ss.getSheets().forEach(sheet => {
+    const name = sheet.getName();
+    if (!name.startsWith(LEDGER_PREFIX)) return;
+    const ledgerDate = name.replace(LEDGER_PREFIX, '');
+    const rows = sheet.getDataRange().getValues();
+    rows.slice(1).forEach(r => {
+      result.push({
+        ledgerDate,
+        date: fmtDate(r[0]),
+        code: String(r[1]),
+        name: r[2],
+        cat: r[3],
+        buyPrice: Number(r[4]),
+        shares: Number(r[5]),
+        score: Number(r[6])
+      });
+    });
+  });
+  return result;
 }
 
 function fmtDate(v) {
