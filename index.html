@@ -301,6 +301,8 @@ tbody td{padding:8px 12px;vertical-align:middle;}
         <div class="export-item" onclick="exportLedger('period-month')">📆 月報表 (Excel)</div>
         <div class="export-item" onclick="exportLedger('period-year')">📆 年報表 (Excel)</div>
         <div class="export-sep"></div>
+        <div class="export-item" onclick="openExportRangeModal()">📊 自訂區間損益 (含分類)</div>
+        <div class="export-sep"></div>
         <div class="export-item" onclick="exportLedger('simple-summary')">📊 簡易損益匯出 (CSV)</div>
         <div class="export-sep"></div>
         <div class="export-item" onclick="exportLedger('all-xlsx')">📊 全帳本匯出 (Excel)</div>
@@ -499,6 +501,44 @@ tbody td{padding:8px 12px;vertical-align:middle;}
     <div class="modal-actions">
       <button class="btn ghost" onclick="document.getElementById('manualPriceModal').classList.remove('open')">取消</button>
       <button class="btn green" onclick="applyManualPrices()">套用現價</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT RANGE MODAL -->
+<div class="modal-bg" id="exportRangeModal">
+  <div class="modal" style="max-width:420px;">
+    <h3>📊 匯出損益報表</h3>
+    <div class="form-group">
+      <label class="form-label">區間類型</label>
+      <select class="form-input" id="exportRangeType" onchange="onExportRangeTypeChange()">
+        <option value="all">全部</option>
+        <option value="day">今日</option>
+        <option value="month">本月</option>
+        <option value="year">本年</option>
+        <option value="custom">自訂區間</option>
+      </select>
+    </div>
+    <div id="exportCustomRange" style="display:none;">
+      <div class="form-group">
+        <label class="form-label">開始日期</label>
+        <input class="form-input" id="exportDateFrom" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">結束日期</label>
+        <input class="form-input" id="exportDateTo" type="date">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">格式</label>
+      <select class="form-input" id="exportRangeFormat">
+        <option value="xlsx">Excel (.xlsx)</option>
+        <option value="csv">CSV (.csv)</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="document.getElementById('exportRangeModal').classList.remove('open')">取消</button>
+      <button class="btn green" onclick="doExportWithRange()">匯出</button>
     </div>
   </div>
 </div>
@@ -1137,8 +1177,10 @@ async function testProxy() {
     if(!url) { statusDot.className='status-dot err'; statusText.textContent='請先設定 GAS URL'; return; }
     try {
       showLoading('測試 GAS 批量代理...');
-      const r = await fetch(url, {method:'POST', mode:'cors', cache:'no-cache', credentials:'omit',
-        body: JSON.stringify({action:'getBatchPrices', codes:['2330']})});
+      const r = await fetch(url + '?action=getBatchPrices&codes=2330', {
+        method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+        headers: {'Accept': 'application/json'}
+      });
       const d = await r.json();
       hideLoading();
       if(d.prices && d.prices['2330'] > 0) {
@@ -1252,9 +1294,11 @@ async function _runBatchOrProxy(codes, label) {
     }
     showToast('GAS批量失敗，改逐檔查詢...', 'fail');
   }
-  // === CORS Proxy 批量查詢（一次送全部，避免 429）===
-  showLoading(`透過 Proxy 批量查詢 ${codes.length} 檔...`);
+  // === CORS Proxy 批量查詢 ===
+  showLoading(`透過 Proxy 分批查詢 ${codes.length} 檔...`);
+  showProgress(0, codes.length);
   const prices = await fetchBatchPricesViaProxy(codes);
+  hideProgress();
   hideLoading();
 
   let updated = 0;
@@ -1262,23 +1306,19 @@ async function _runBatchOrProxy(codes, label) {
     if (prices[c] > 0) { livePrices[c] = prices[c]; updated++; }
   });
 
-  // 若批量失敗超過一半，才降級逐檔（每次2檔，間隔2秒）
+  // 僅補查真正失敗的（非交易時間y欄位也無值的）
   const failed = codes.filter(c => !prices[c]);
-  if (failed.length > 0 && updated < codes.length / 2) {
-    showLoading(`批量部分失敗，補查 ${failed.length} 檔...`);
-    showProgress(0, failed.length);
-    let done = 0;
+  if (failed.length > 0 && failed.length <= codes.length * 0.3) {
+    // 僅在失敗率低於30%時才補查，避免無謂重試
+    showLoading(`補查 ${failed.length} 檔...`);
     for (let i = 0; i < failed.length; i += 2) {
       const batch = failed.slice(i, i + 2);
       await Promise.allSettled(batch.map(async code => {
         const p = await fetchOneLivePriceProxy(code);
         if (p) { livePrices[code] = p; updated++; }
       }));
-      done = Math.min(i + 2, failed.length);
-      showProgress(done, failed.length);
-      if (i + 2 < failed.length) await new Promise(r => setTimeout(r, 2000));
+      if (i + 2 < failed.length) await new Promise(r => setTimeout(r, 2500));
     }
-    hideProgress();
     hideLoading();
   }
 
@@ -1512,6 +1552,144 @@ function exportXlsxMultisheet(sheetsObj, filename) {
   if(wb.SheetNames.length===0) { showToast('無資料可匯出','fail'); return; }
   XLSX.writeFile(wb, filename+'.xlsx');
   showToast('已匯出 '+filename+'.xlsx','ok');
+}
+
+function openExportRangeModal() {
+  document.getElementById('ledgerExportMenu').classList.remove('open');
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('exportDateFrom').value = today;
+  document.getElementById('exportDateTo').value = today;
+  document.getElementById('exportRangeType').value = 'all';
+  document.getElementById('exportCustomRange').style.display = 'none';
+  document.getElementById('exportRangeModal').classList.add('open');
+}
+
+function onExportRangeTypeChange() {
+  const t = document.getElementById('exportRangeType').value;
+  document.getElementById('exportCustomRange').style.display = t === 'custom' ? 'block' : 'none';
+}
+
+function getExportDateRange() {
+  const t = document.getElementById('exportRangeType').value;
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  if (t === 'all') return null;
+  if (t === 'day') return { from: today, to: today };
+  if (t === 'month') {
+    const y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0');
+    return { from: `${y}-${m}-01`, to: `${y}-${m}-31` };
+  }
+  if (t === 'year') return { from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31` };
+  if (t === 'custom') {
+    return {
+      from: document.getElementById('exportDateFrom').value,
+      to: document.getElementById('exportDateTo').value
+    };
+  }
+  return null;
+}
+
+function doExportWithRange() {
+  const range = getExportDateRange();
+  const fmt = document.getElementById('exportRangeFormat').value;
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+
+  // 收集所有帳本中符合區間的記錄
+  const allRecords = [];
+  Object.keys(ledger).forEach(ledgerKey => {
+    (ledger[ledgerKey] || []).forEach(r => {
+      if (range && (r.date < range.from || r.date > range.to)) return;
+      allRecords.push({ ...r, _ledgerKey: ledgerKey });
+    });
+  });
+
+  if (!allRecords.length) { showToast('所選區間無帳務資料', 'fail'); return; }
+
+  // ── 明細工作表 ──
+  const detailRows = allRecords.map(r => {
+    const lp = livePrices[r.code] || r.buyPrice;
+    const invested = r.shares * r.buyPrice;
+    const curVal = r.shares * lp;
+    const pnl = curVal - invested;
+    const pct = invested > 0 ? pnl / invested * 100 : 0;
+    return {
+      '帳本': r._ledgerKey,
+      '交易日期': r.date,
+      '代號': r.code,
+      '名稱': r.name,
+      '分類': CAT_LABELS[r.cat] || r.cat,
+      '買入價': r.buyPrice,
+      '股數': r.shares,
+      '投入金額': +invested.toFixed(0),
+      '現價': +parseFloat(lp).toFixed(2),
+      '市值': +curVal.toFixed(0),
+      '損益': +pnl.toFixed(0),
+      '損益%': pct.toFixed(2) + '%'
+    };
+  });
+
+  // ── 分類損益匯總 ──
+  const catMap = {};
+  allRecords.forEach(r => {
+    const lp = livePrices[r.code] || r.buyPrice;
+    const invested = r.shares * r.buyPrice;
+    const curVal = r.shares * lp;
+    if (!catMap[r.cat]) catMap[r.cat] = { invested: 0, current: 0, count: 0, win: 0 };
+    catMap[r.cat].invested += invested;
+    catMap[r.cat].current += curVal;
+    catMap[r.cat].count++;
+    if (lp > r.buyPrice) catMap[r.cat].win++;
+  });
+
+  const catRows = Object.entries(catMap).map(([cat, s]) => {
+    const pnl = s.current - s.invested;
+    const pct = s.invested > 0 ? pnl / s.invested * 100 : 0;
+    return {
+      '分類': CAT_LABELS[cat] || cat,
+      '檔數': s.count,
+      '投入金額': +s.invested.toFixed(0),
+      '市值': +s.current.toFixed(0),
+      '損益': +pnl.toFixed(0),
+      '損益%': pct.toFixed(2) + '%',
+      '勝率': s.count > 0 ? (s.win / s.count * 100).toFixed(1) + '%' : '0%'
+    };
+  });
+
+  // ── 總計 ──
+  const totalInvested = allRecords.reduce((a, r) => a + r.shares * r.buyPrice, 0);
+  const totalCurrent = allRecords.reduce((a, r) => a + r.shares * (livePrices[r.code] || r.buyPrice), 0);
+  const totalPnl = totalCurrent - totalInvested;
+  const totalPct = totalInvested > 0 ? totalPnl / totalInvested * 100 : 0;
+  const winCount = allRecords.filter(r => (livePrices[r.code] || r.buyPrice) > r.buyPrice).length;
+
+  const summaryRows = [
+    { '項目': '統計區間', '值': range ? `${range.from} ~ ${range.to}` : '全部' },
+    { '項目': '總檔數', '值': allRecords.length },
+    { '項目': '總投入 (NTD)', '值': +totalInvested.toFixed(0) },
+    { '項目': '總市值 (NTD)', '值': +totalCurrent.toFixed(0) },
+    { '項目': '總損益 (NTD)', '值': +totalPnl.toFixed(0) },
+    { '項目': '總損益率', '值': totalPct.toFixed(2) + '%' },
+    { '項目': '整體勝率', '值': allRecords.length > 0 ? (winCount / allRecords.length * 100).toFixed(1) + '%' : '0%' },
+  ];
+
+  const label = range ? `${range.from}_${range.to}` : '全部';
+  const filename = `損益報表_${label}`;
+
+  if (fmt === 'csv') {
+    // CSV 只輸出明細
+    exportCsv(detailRows, filename + '_明細');
+    exportCsv(catRows, filename + '_分類');
+  } else {
+    // Excel 多工作表
+    exportXlsxMultisheet({
+      '總覽': summaryRows,
+      '分類損益': catRows,
+      '明細': detailRows,
+    }, filename);
+  }
+
+  document.getElementById('exportRangeModal').classList.remove('open');
 }
 
 function styleXlsxHeader(ws, colCount) {
