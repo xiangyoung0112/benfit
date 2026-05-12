@@ -2104,8 +2104,8 @@ function getBatchPrices(codes) {
   if (needFetch.length > 0) {
     const chunk = needFetch.slice(0, 30);
     // 同時帶 tse + otc，TWSE 會自動只回傳存在的那個
-    const ex_ch = chunk.map(c => 'tse_' + c + '.tw|').join('') +
-                  chunk.map(c => 'otc_' + c + '.tw|').join('');
+    const ex_ch = chunk.map(c => 'tse_' + c + '.tw%7C').join('') +
+                  chunk.map(c => 'otc_' + c + '.tw%7C').join('');
     try {
       const url = 'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=' + ex_ch;
       const res = UrlFetchApp.fetch(url, {
@@ -2150,8 +2150,8 @@ function updateAllPrices() {
   const allPrices = {};
   for (let i = 0; i < codes.length; i += CHUNK) {
     const chunk = codes.slice(i, i + CHUNK);
-    const ex_ch = chunk.map(c => \`tse_\${c}.tw|\`).join('') +
-                  chunk.map(c => \`otc_\${c}.tw|\`).join('');
+    const ex_ch = chunk.map(c => \`tse_\${c}.tw%7C\`).join('') +
+                  chunk.map(c => \`otc_\${c}.tw%7C\`).join('');
     try {
       const url = \`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=\${ex_ch}\`;
       const res = UrlFetchApp.fetch(url, {muteHttpExceptions: true});
