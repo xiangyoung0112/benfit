@@ -241,7 +241,8 @@ tbody td{padding:8px 12px;vertical-align:middle;}
     </div>
 
     <button class="btn green" onclick="fetchLivePrices()">🔄 更新現價</button>
-    <button class="btn" onclick="saveAllToTodayLedger()">📥 全部匯入今日帳本</button>
+    <select id="saveLedgerSelect"></select>
+    <button class="btn" onclick="importPerfToLedger()">📥 匯入所選帳本</button>
   </div>
   <div class="table-wrap" style="max-height:calc(100vh - 320px);">
     <table id="perfTable">
@@ -776,31 +777,43 @@ function addOneLedger(code, name, cat, price, score) {
   showToast('已加入 '+name+' 到'+targetDate+'帳本（需點「☁️ 同步GAS」以保存）','ok');
 }
 
-// 全部匯入今日帳本（替換舊的 saveTodayToGAS）
-async function saveAllToTodayLedger() {
+// 將績效頁篩選結果匯入指定帳本
+async function importPerfToLedger() {
+  const targetDate = document.getElementById('saveLedgerSelect').value;
+  if(!targetDate) {
+    showToast('請選擇要匯入的帳本', 'fail');
+    return;
+  }
   const today = new Date().toISOString().split('T')[0];
-  if(!ledger[today]) ledger[today] = [];
-  currentLedgerDate = today;
+  if(!ledger[targetDate]) ledger[targetDate] = [];
+  
   const data = getFilteredStocks();
   let added = 0, skipped = 0;
+  
   data.forEach(s => {
     const shares = calcShares(s['現價']);
     if(shares <= 0) { skipped++; return; }
-    if(ledger[today].find(r => r.code === s['代號'] && r.date === today)) { skipped++; return; }
-    ledger[today].push({ date:today, code:s['代號'], name:s['名稱'], cat:s['分類'],
+    // 檢查在目標帳本中，是否已有「同交易日」的「同一支股票」
+    if(ledger[targetDate].find(r => r.code === s['代號'] && r.date === today)) { 
+      skipped++; 
+      return; 
+    }
+    ledger[targetDate].push({ 
+      date: today, // 交易日固定為今天
+      code: s['代號'], 
+      name: s['名稱'], 
+      cat: s['分類'],
       buyPrice: livePrices[s['代號']] || s['現價'], shares, score:s['貝氏評分'] });
     added++;
   });
+  
   renderLedgerTabs();
-  updateSaveLedgerSelect();
-  showToast(`✓ 已匯入 ${added} 檔到今日帳本（跳過 ${skipped}）`, 'ok');
-  if(gasUrl) enqueuSync(()=>pushLedgerToGAS(), '同步今日帳本...');
+  showToast(`✓ 已匯入 ${added} 檔到 ${formatDateLabel(targetDate)}（跳過 ${skipped}）`, 'ok');
+  if(gasUrl) enqueuSync(()=>pushLedgerToGAS(), `同步 ${targetDate} 帳本...`);
 }
 
 // 保留舊名稱相容
-async function saveTodayToGAS() { return saveAllToTodayLedger(); }
-
-
+async function saveTodayToGAS() { return importPerfToLedger(); }
 
 function setPeriod(p, btn) {
   currentPeriod = p;
@@ -924,15 +937,15 @@ function deleteLedger(ledgerDate, idx) {
 }
 
 function updateSaveLedgerSelect() {
-  // saveLedgerSelect removed; kept for compatibility
   const select = document.getElementById('saveLedgerSelect');
   if(!select) return;
+  const curVal = select.value;
   const today = new Date().toISOString().split('T')[0];
   const dates = [...new Set([...Object.keys(ledger), today])].sort().reverse();
   select.innerHTML = dates.map(d => `<option value="${d}">${formatDateLabel(d)}</option>`).join('');
-  select.value = today;
+  if(dates.includes(curVal) && curVal) select.value = curVal;
+  else select.value = today;
 }
-
 function openAddManual() { document.getElementById('addModal').classList.add('open'); }
 
 function submitManualAdd() {
