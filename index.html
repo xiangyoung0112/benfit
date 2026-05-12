@@ -1212,24 +1212,51 @@ async function testProxy() {
 // LIVE PRICE FETCH — GAS 批量 + CORS Proxy fallback
 // ============================================================
 
-// GAS 批量查詢：一次送所有代號，GAS 回傳 {prices:{代號:price,...}}
-async function fetchBatchPricesViaGAS(codes) {
+// GAS 批量查詢：前端分批送，支援進度條回調
+async function fetchBatchPricesViaGAS(codes, onProgress) {
   if(!gasUrl) return null;
-  try {
-    // 改用 GET + query string，避免 GAS doPost 解析問題
-    const params = new URLSearchParams({
-      action: 'getBatchPrices',
-      codes: codes.join(',')
-    });
-    const r = await fetch(`${gasUrl}?${params.toString()}`, {
-      method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
-      headers: {'Accept': 'application/json'}
-    });
-    if(!r.ok) return null;
-    const d = await r.json();
-    if(d.prices) return d.prices;
-  } catch(e) { console.warn('GAS批量查詢失敗:', e.message); }
-  return null;
+  const CHUNK = 30; // 每批送30檔給GAS
+  const result = {};
+  let done = 0;
+
+  for(let i = 0; i < codes.length; i += CHUNK) {
+    const chunk = codes.slice(i, i + CHUNK);
+    try {
+      const params = new URLSearchParams({
+        action: 'getBatchPrices',
+        codes: chunk.join(',')
+      });
+      const r = await fetch(`${gasUrl}?${params.toString()}`, {
+        method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+        headers: {'Accept': 'application/json'}
+      });
+      if(r.ok) {
+        const d = await r.json();
+        if(d.prices) {
+          Object.entries(d.prices).forEach(([code, price]) => {
+            if(price > 0) result[code] = price;
+          });
+        }
+      }
+    } catch(e) {
+      console.warn(`GAS第${Math.floor(i/CHUNK)+1}批失敗:`, e.message);
+    }
+
+    done = Math.min(i + CHUNK, codes.length);
+    const successCount = Object.keys(result).length;
+    
+    // 更新進度
+    showProgress(done, codes.length);
+    document.getElementById('loadingText').textContent = 
+      `GAS查詢中... ${done}/${codes.length} 檔｜✓ ${successCount} 筆成功`;
+    
+    if(onProgress) onProgress(done, codes.length, successCount);
+    
+    // 批次間稍作等待避免GAS過載
+    if(i + CHUNK < codes.length) await new Promise(r => setTimeout(r, 300));
+  }
+
+  return result;
 }
 
 async function fetchOneLivePriceProxy(code) {
@@ -1282,17 +1309,30 @@ async function _runBatchOrProxy(codes, label) {
   const mode = document.getElementById('proxyMode')?.value || proxyMode;
   // === GAS 批量優先 ===
   if(mode === 'gas' && gasUrl) {
-    showLoading(`透過 GAS 批量查詢 ${codes.length} 檔...`);
-    const prices = await fetchBatchPricesViaGAS(codes);
+    showLoading(`透過 GAS 查詢 ${codes.length} 檔...`);
+    showProgress(0, codes.length);
+
+    const prices = await fetchBatchPricesViaGAS(codes, (done, total, success) => {
+      showProgress(done, total);
+      document.getElementById('loadingText').textContent =
+        `GAS查詢中... ${done}/${total} 檔｜✓ ${success} 筆成功`;
+    });
+
+    hideProgress();
     hideLoading();
-    if(prices) {
+
+    if(prices && Object.keys(prices).length > 0) {
       let updated = 0;
       codes.forEach(c => { if(prices[c] > 0) { livePrices[c] = prices[c]; updated++; } });
       livePriceTimestamp = Date.now();
-      showToast(`✓ GAS批量：${updated}/${codes.length} 檔更新`, updated > 0 ? 'ok' : 'fail');
+      const msg = updated === codes.length
+        ? `✓ 全部 ${updated} 檔成功`
+        : updated > 0 ? `⚠️ 部分成功 ${updated}/${codes.length}`
+        : '✗ GAS查詢失敗';
+      showToast(msg, updated > 0 ? 'ok' : 'fail');
       renderPerf(); renderLedger(); return;
     }
-    showToast('GAS批量失敗，改逐檔查詢...', 'fail');
+    showToast('GAS查詢失敗，改用Proxy...', 'fail');
   }
   // === CORS Proxy 批量查詢 ===
   showLoading(`透過 Proxy 分批查詢 ${codes.length} 檔...`);
