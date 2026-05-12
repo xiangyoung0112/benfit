@@ -2046,38 +2046,34 @@ function normalizeUploadRows(rows) {
 // GAS CODE
 // ============================================================
 function renderGASCode() {
-  document.getElementById('gasCode').value = `// ====== 台股績效系統 GAS 後端 v2 ======
-// 功能：
-//   1. getBatchPrices  — 批量查詢現價（POST），回傳 {prices:{代號:price}}
-//   2. getLedger       — 讀所有帳本（GET）
-//   3. saveLedger      — 存帳本，每個日期獨立工作表（POST）
-//   4. ping            — 連線測試（GET）
-//   5. updateAllPrices — 更新全台股現價工作表（GET/觸發器）
-//
+  document.getElementById('gasCode').value = `// ====== 台股績效系統 GAS 後端 v3 ======
+// 資料來源：TWSE openapi（上市）+ TPEx openapi（上櫃）
 // 部署：執行身份「以我的身份」、存取「任何人」
-// 觸發器：可設 updateAllPrices 每日09:30自動執行
 
-const PRICE_SHEET   = '全台股現價';   // 所有股票現價（GAS自動更新）
-const LEDGER_PREFIX = '帳本_';       // 每個帳本日期一張工作表
+const PRICE_SHEET   = '全台股現價';
+const LEDGER_PREFIX = '帳本_';
 
-// ─── 路由 ───────────────────────────────────────────────────
+// ─── 路由 ────────────────────────────────────────────────────
 function doGet(e) {
-  const a = e.parameter.action;
+  const a = (e.parameter || {}).action;
   if (a === 'ping')            return json({status:'ok', time: new Date().toISOString()});
   if (a === 'getLedger')       return json({data: readAllLedgers()});
   if (a === 'getBatchPrices') {
     const codes = (e.parameter.codes || '').split(',').filter(Boolean);
     return json({prices: getBatchPrices(codes)});
   }
-  if (a === 'updateAllPrices') { updateAllPrices(); return json({status:'ok'}); }
+  if (a === 'updateAllPrices') {
+    updateAllPrices();
+    return json({status:'ok'});
+  }
   return json({error:'unknown action'});
 }
 
 function doPost(e) {
   try {
     const b = JSON.parse(e.postData.contents);
+    if (b.action === 'saveLedger') return json({status:'ok', count: writeLedgerSheet(b.date, b.data)});
     if (b.action === 'getBatchPrices') return json({prices: getBatchPrices(b.codes || [])});
-    if (b.action === 'saveLedger')     return json({status:'ok', count: writeLedgerSheet(b.date, b.data)});
     return json({error:'unknown action'});
   } catch(err) {
     return json({error: err.message});
@@ -2089,54 +2085,62 @@ function json(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ─── 批量現價查詢 ────────────────────────────────────────────
-// 快取：一次抓全部上市+上櫃，存進物件供查詢
-let _priceCache = null;
+// ─── 抓取所有現價（TWSE + TPEx）────────────────────────────
+function fetchAllMarketPrices() {
+  const result = {};
 
-function _loadAllPrices() {
-  if (_priceCache) return _priceCache;
-  _priceCache = {};
-  
-  // 上櫃 TPEx
+  // 1. 上市 TWSE
   try {
-    const res = UrlFetchApp.fetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes', {
-      muteHttpExceptions: true
-    });
+    const res = UrlFetchApp.fetch(
+      'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL',
+      { muteHttpExceptions: true }
+    );
     if (res.getResponseCode() === 200) {
       const data = JSON.parse(res.getContentText());
       data.forEach(item => {
-        const code = item.SecuritiesCompanyCode;
-        const price = parseFloat(item.Close);
-        if (code && price > 0) _priceCache[code] = price;
+        const code = (item.Code || '').trim();
+        const raw  = (item.ClosingPrice || '').replace(/,/g, '');
+        const price = parseFloat(raw);
+        if (code && price > 0) result[code] = price;
       });
-      Logger.log('上櫃載入: ' + Object.keys(_priceCache).length + ' 筆');
-    }
-  } catch(e) { Logger.log('TPEx 錯誤: ' + e.message); }
-
-  // 上市 TWSE — 用可以連的端點
-  try {
-    const res = UrlFetchApp.fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL', {
-      muteHttpExceptions: true
-    });
-    if (res.getResponseCode() === 200) {
-      const data = JSON.parse(res.getContentText());
-      data.forEach(item => {
-        // 欄位: Code, ClosingPrice
-        const code = item.Code;
-        const price = parseFloat(item.ClosingPrice?.replace(/,/g,''));
-        if (code && price > 0) _priceCache[code] = price;
-      });
-      Logger.log('上市載入完成');
+      Logger.log('[TWSE] 載入 ' + Object.keys(result).length + ' 筆');
     } else {
-      Logger.log('TWSE 狀態碼: ' + res.getResponseCode());
+      Logger.log('[TWSE] 狀態碼: ' + res.getResponseCode());
     }
-  } catch(e) { Logger.log('TWSE 錯誤: ' + e.message); }
+  } catch(e) {
+    Logger.log('[TWSE] 錯誤: ' + e.message);
+  }
 
-  return _priceCache;
+  // 2. 上櫃 TPEx
+  try {
+    const res = UrlFetchApp.fetch(
+      'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes',
+      { muteHttpExceptions: true }
+    );
+    if (res.getResponseCode() === 200) {
+      const data = JSON.parse(res.getContentText());
+      data.forEach(item => {
+        const code  = (item.SecuritiesCompanyCode || '').trim();
+        const price = parseFloat(item.Close);
+        if (code && price > 0) result[code] = price;
+      });
+      Logger.log('[TPEx] 載入完成，總計 ' + Object.keys(result).length + ' 筆');
+    } else {
+      Logger.log('[TPEx] 狀態碼: ' + res.getResponseCode());
+    }
+  } catch(e) {
+    Logger.log('[TPEx] 錯誤: ' + e.message);
+  }
+
+  return result;
 }
 
+// ─── 批量現價查詢 ─────────────────────────────────────────
 function getBatchPrices(codes) {
-  const cached = readPriceSheet();  // 從工作表快取讀
+  if (!codes || codes.length === 0) return {};
+
+  // 優先從工作表快取讀（當日盤後已更新時最快）
+  const cached = readPriceSheet();
   const result = {};
   const needFetch = [];
 
@@ -2145,8 +2149,9 @@ function getBatchPrices(codes) {
     else needFetch.push(code);
   });
 
+  // 快取沒有的，即時抓全市場資料
   if (needFetch.length > 0) {
-    const allPrices = _loadAllPrices();
+    const allPrices = fetchAllMarketPrices();
     needFetch.forEach(code => {
       if (allPrices[code] > 0) result[code] = allPrices[code];
     });
@@ -2155,15 +2160,13 @@ function getBatchPrices(codes) {
   return result;
 }
 
-// ─── 全台股現價表（可設觸發器自動執行）──────────────────────
+// ─── 更新全台股現價工作表（可設觸發器每日收盤後執行）──────
 function updateAllPrices() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let s = ss.getSheetByName(PRICE_SHEET);
   if (!s) s = ss.insertSheet(PRICE_SHEET);
 
-  _priceCache = null; // 清除快取強制重新抓
-  const allPrices = _loadAllPrices();
-
+  const allPrices = fetchAllMarketPrices();
   if (Object.keys(allPrices).length === 0) {
     Logger.log('無資料，更新中止');
     return;
@@ -2171,69 +2174,52 @@ function updateAllPrices() {
 
   const now = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
   s.clearContents();
-  s.appendRow(['代號', '名稱', '現價', '更新時間']);
-  s.getRange(1,1,1,4).setFontWeight('bold').setBackground('#f5e6d3');
-  Object.entries(allPrices).forEach(([code, price]) => {
-    s.appendRow([code, '', price, now]);
-  });
-  Logger.log('更新完成: ' + Object.keys(allPrices).length + ' 筆');
-}
+  s.appendRow(['代號', '現價', '更新時間']);
+  s.getRange(1,1,1,3).setFontWeight('bold').setBackground('#f5e6d3');
 
-function debugTWSE() {
-  const res = UrlFetchApp.fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL', {
-    muteHttpExceptions: true
-  });
-  Logger.log('狀態碼: ' + res.getResponseCode());
-  if (res.getResponseCode() === 200) {
-    const data = JSON.parse(res.getContentText());
-    Logger.log('筆數: ' + data.length);
-    Logger.log('第一筆: ' + JSON.stringify(data[0]));
+  const rows = Object.entries(allPrices).map(([code, price]) => [code, price, now]);
+  if (rows.length > 0) {
+    s.getRange(2, 1, rows.length, 3).setValues(rows);
   }
+  Logger.log('updateAllPrices 完成: ' + rows.length + ' 筆');
 }
 
-// 從所有帳本工作表收集追蹤代號
-function getAllTrackedCodes() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const codeSet = new Set();
-  ss.getSheets().forEach(sheet => {
-    if (!sheet.getName().startsWith(LEDGER_PREFIX)) return;
-    const vals = sheet.getDataRange().getValues();
-    vals.slice(1).forEach(r => { if (r[2]) codeSet.add(String(r[2])); });
-  });
-  return [...codeSet];
-}
-
-// 讀全台股現價工作表，回傳 {代號: price}
+// ─── 讀全台股現價工作表快取 ──────────────────────────────
 function readPriceSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const s = ss.getSheetByName(PRICE_SHEET);
+  const s  = ss.getSheetByName(PRICE_SHEET);
   if (!s) return {};
   const rows = s.getDataRange().getValues();
   const result = {};
+  // 新格式：代號, 現價, 更新時間（3欄）
+  // 舊格式：代號, 名稱, 現價, 更新時間（4欄）
   rows.slice(1).forEach(r => {
-    if (r[0] && r[2]) result[String(r[0])] = Number(r[2]);
+    const code  = String(r[0]).trim();
+    const price = rows[0].length >= 4 ? Number(r[2]) : Number(r[1]);
+    if (code && price > 0) result[code] = price;
   });
   return result;
 }
 
-// ─── 帳本（每個日期獨立工作表）──────────────────────────────
-const LEDGER_HEADERS = ['date','code','name','cat','buyPrice','shares','score'];
-
+// ─── 帳本讀寫 ────────────────────────────────────────────
 function writeLedgerSheet(date, data) {
   if (!date || !data) return 0;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetName = LEDGER_PREFIX + date;
   let s = ss.getSheetByName(sheetName);
-  if (!s) {
-    s = ss.insertSheet(sheetName);
-  }
+  if (!s) s = ss.insertSheet(sheetName);
+
   s.clearContents();
   s.appendRow(['日期','代號','名稱','分類','買入價','股數','貝氏評分']);
-  const hdr = s.getRange(1,1,1,7);
-  hdr.setFontWeight('bold').setBackground('#f5e6d3').setFontColor('#3d2b1a');
-  data.forEach(r => {
-    s.appendRow([r.date||date, r.code, r.name, r.cat, r.buyPrice, r.shares, r.score]);
-  });
+  s.getRange(1,1,1,7).setFontWeight('bold').setBackground('#f5e6d3').setFontColor('#3d2b1a');
+
+  if (data.length > 0) {
+    const rows = data.map(r => [
+      r.date || date, r.code, r.name, r.cat,
+      r.buyPrice, r.shares, r.score
+    ]);
+    s.getRange(2, 1, rows.length, 7).setValues(rows);
+  }
   return data.length;
 }
 
@@ -2246,15 +2232,16 @@ function readAllLedgers() {
     const ledgerDate = name.replace(LEDGER_PREFIX, '');
     const rows = sheet.getDataRange().getValues();
     rows.slice(1).forEach(r => {
+      if (!r[1]) return; // 跳過空行
       result.push({
         ledgerDate,
-        date: fmtDate(r[0]),
-        code: String(r[1]),
-        name: r[2],
-        cat: r[3],
-        buyPrice: Number(r[4]),
-        shares: Number(r[5]),
-        score: Number(r[6])
+        date:      fmtDate(r[0]),
+        code:      String(r[1]).trim(),
+        name:      r[2],
+        cat:       r[3],
+        buyPrice:  Number(r[4]),
+        shares:    Number(r[5]),
+        score:     Number(r[6])
       });
     });
   });
@@ -2264,6 +2251,12 @@ function readAllLedgers() {
 function fmtDate(v) {
   if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Taipei', 'yyyy-MM-dd');
   return String(v);
+}
+
+// ─── 驗證用（部署後可刪除）──────────────────────────────
+function testGetPrices() {
+  const prices = getBatchPrices(['2330','2317','2382','3008']);
+  Logger.log(JSON.stringify(prices));
 }`;
 }
 
