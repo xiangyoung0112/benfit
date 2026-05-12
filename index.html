@@ -143,6 +143,10 @@ tbody td{padding:8px 12px;vertical-align:middle;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .loading-text{color:var(--text2);font-size:14px;}
 
+/* Progress bar for batch fetch */
+.progress-bar-wrap{width:220px;height:4px;background:var(--border2);border-radius:2px;overflow:hidden;}
+.progress-bar{height:100%;background:var(--blue);border-radius:2px;transition:width .2s ease;}
+
 .stock-picker{display:grid;grid-template-columns:1fr 1fr;gap:14px;height:380px;}
 .picker-list{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);overflow-y:auto;padding:6px;}
 .picker-item{padding:7px 9px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:7px;transition:background .12s;}
@@ -180,6 +184,9 @@ tbody td{padding:8px 12px;vertical-align:middle;}
 <div class="loading-overlay" id="loadingOverlay">
   <div class="spinner"></div>
   <div class="loading-text" id="loadingText">載入中...</div>
+  <div class="progress-bar-wrap" id="progressWrap" style="display:none;">
+    <div class="progress-bar" id="progressBar" style="width:0%"></div>
+  </div>
 </div>
 <div class="toast" id="toast"></div>
 <div class="sync-queue" id="syncQueue">
@@ -216,7 +223,6 @@ tbody td{padding:8px 12px;vertical-align:middle;}
     <div class="spacer"></div>
     <div class="count-badge" id="countBadge">0 檔</div>
 
-    <!-- Export dropdown -->
     <div class="export-wrap">
       <button class="btn gold" onclick="toggleExportMenu()">📤 匯出 ▾</button>
       <div class="export-menu" id="perfExportMenu">
@@ -256,14 +262,12 @@ tbody td{padding:8px 12px;vertical-align:middle;}
 
 <!-- LEDGER PAGE -->
 <div class="page" id="page-ledger">
-  <!-- Ledger tabs (one per ledger date) -->
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
     <div class="ledger-tabs" id="ledgerTabs"></div>
     <button class="btn ghost" style="font-size:18px;padding:4px 12px;" onclick="openAddLedgerModal()" title="新增帳本">＋</button>
   </div>
 
   <div class="toolbar">
-    <!-- Period filter -->
     <div class="period-tabs">
       <button class="period-tab active" onclick="setPeriod('all',this)">全部</button>
       <button class="period-tab" onclick="setPeriod('day',this)">日</button>
@@ -281,7 +285,6 @@ tbody td{padding:8px 12px;vertical-align:middle;}
     </select>
     <div class="spacer"></div>
 
-    <!-- Export dropdown for ledger -->
     <div class="export-wrap">
       <button class="btn gold" onclick="toggleExportMenuLedger()">📤 匯出 ▾</button>
       <div class="export-menu" id="ledgerExportMenu">
@@ -301,8 +304,7 @@ tbody td{padding:8px 12px;vertical-align:middle;}
     <button class="btn ghost" onclick="openAddManual()">＋ 手動新增</button>
   </div>
 
-  <!-- Live price freshness indicator -->
-  <div id="ledgerPriceBanner" style="display:none;margin-bottom:10px;padding:8px 14px;background:var(--red-dim);border:1px solid var(--red2);border-radius:var(--r);font-size:12px;color:var(--red);display:none;">
+  <div id="ledgerPriceBanner" style="display:none;margin-bottom:10px;padding:8px 14px;background:var(--red-dim);border:1px solid var(--red2);border-radius:var(--r);font-size:12px;color:var(--red);">
     ⚠️ 現價尚未更新，損益數據為估算值。點「更新現價」取得即時行情。
   </div>
 
@@ -467,16 +469,15 @@ const CAT_COLORS = {
 let currentCat = 'all';
 let sortCol = '貝氏評分', sortDir = -1;
 let manualSelected = new Set();
-let ledger = {};           // { 'YYYY-MM-DD': [{...}, ...] }
-let currentLedgerDate = null; // active ledger tab
-let livePrices = {};       // { code: price }
-let livePriceTimestamp = null; // when prices were last updated
+let ledger = {};
+let currentLedgerDate = null;
+let livePrices = {};
+let livePriceTimestamp = null;
 let gasUrl = '';
 let appCharts = {};
 let pickerSelection = new Set();
-let currentPeriod = 'all'; // day / month / year / all
+let currentPeriod = 'all';
 
-// Background sync queue
 let syncQueue = [];
 let syncRunning = false;
 
@@ -528,7 +529,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadStocksFromGAS(true);
   }
 
-  // Close export menus on outside click
   document.addEventListener('click', e => {
     if(!e.target.closest('.export-wrap')) {
       document.querySelectorAll('.export-menu').forEach(m => m.classList.remove('open'));
@@ -587,7 +587,6 @@ function renderLedgerTabs() {
     </button>`;
   }).join('');
 
-  // Update chart ledger select
   const cl = document.getElementById('chartLedger');
   if(cl) {
     cl.innerHTML = '<option value="all">全部帳本</option>' +
@@ -759,19 +758,15 @@ function getDateRange(period) {
 function renderLedger() {
   if(!currentLedgerDate || !ledger[currentLedgerDate]) { ensureTodayLedger(); }
 
-  // Show/hide live price banner
   const banner = document.getElementById('ledgerPriceBanner');
   const isStale = !livePriceTimestamp || (Date.now() - livePriceTimestamp > 3600000);
   banner.style.display = isStale ? 'block' : 'none';
 
-  // Get current ledger records
   let data = (ledger[currentLedgerDate] || []).map((r,idx) => ({...r, _idx:idx}));
 
-  // Apply period filter
   const range = getDateRange(currentPeriod);
   if(range) data = data.filter(r => r.date >= range.from && r.date <= range.to);
 
-  // Apply filters
   const dateF = document.getElementById('ledgerDateFilter').value;
   const catF = document.getElementById('ledgerCatFilter').value;
   const q = (document.getElementById('ledgerSearch').value||'').toLowerCase();
@@ -792,7 +787,6 @@ function renderLedger() {
     });
   }
 
-  // Update date filter options for this ledger
   const allDates = [...new Set((ledger[currentLedgerDate]||[]).map(r=>r.date))].sort().reverse();
   const selDate = document.getElementById('ledgerDateFilter').value;
   document.getElementById('ledgerDateFilter').innerHTML = '<option value="">全部日期</option>' +
@@ -908,50 +902,123 @@ function submitAddLedger() {
 }
 
 // ============================================================
-// LIVE PRICE UPDATE
+// LIVE PRICE UPDATE - 批量並列抓取 (BATCH PARALLEL - 方案A)
+// 原本：逐檔串列 + 120ms 延遲 → 50檔約 6秒以上
+// 優化後：5檔一批並列 + 80ms 批次間延遲 → 50檔約 1-2秒
 // ============================================================
+
+function showProgress(current, total) {
+  const pct = Math.round(current / total * 100);
+  const wrap = document.getElementById('progressWrap');
+  const bar = document.getElementById('progressBar');
+  if(wrap) wrap.style.display = 'block';
+  if(bar) bar.style.width = pct + '%';
+  document.getElementById('loadingText').textContent =
+    `更新現價中... ${current}/${total} (${pct}%)`;
+}
+
+function hideProgress() {
+  const wrap = document.getElementById('progressWrap');
+  if(wrap) wrap.style.display = 'none';
+  const bar = document.getElementById('progressBar');
+  if(bar) bar.style.width = '0%';
+}
+
+async function fetchOneLivePrice(code) {
+  // Try TSE first, fallback to OTC
+  const tseUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=tse_${code}.tw`;
+  const otcUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=otc_${code}.tw`;
+  try {
+    let res = await fetch(tseUrl);
+    let d = await res.json();
+    let z = d.msgArray?.[0]?.z;
+    if(z && z !== '-') return parseFloat(z);
+    // Try OTC
+    res = await fetch(otcUrl);
+    d = await res.json();
+    z = d.msgArray?.[0]?.z;
+    if(z && z !== '-') return parseFloat(z);
+  } catch(e) {}
+  return null;
+}
+
 async function fetchLivePrices() {
-  showLoading('更新現價中...');
-  const visible = getFilteredStocks().slice(0,30);
+  const visible = getFilteredStocks().slice(0, 60);
+  const codes = visible.map(s => s['代號']);
+  if(codes.length === 0) { showToast('沒有股票可更新', 'fail'); return; }
+
+  showLoading(`更新現價中... 0/${codes.length}`);
+  showProgress(0, codes.length);
+
+  const BATCH = 5;       // 每批並列數
+  const DELAY_MS = 80;   // 批次間隔（ms），避免觸發 rate limit
   let updated = 0;
-  for(const s of visible) {
-    try {
-      const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=tse_${s['代號']}.tw`;
-      const r = await fetch(url);
-      const d = await r.json();
-      if(d.msgArray&&d.msgArray[0]) {
-        const z = d.msgArray[0].z;
-        if(z&&z!=='-') { livePrices[s['代號']]=parseFloat(z); updated++; }
-      }
-    } catch(e) {}
-    await new Promise(r=>setTimeout(r,120));
+  let done = 0;
+
+  for(let i = 0; i < codes.length; i += BATCH) {
+    const batch = codes.slice(i, i + BATCH);
+
+    // 同批並列執行，任一失敗不影響其他
+    const results = await Promise.allSettled(
+      batch.map(async code => {
+        const price = await fetchOneLivePrice(code);
+        if(price !== null) { livePrices[code] = price; updated++; }
+      })
+    );
+
+    done = Math.min(i + BATCH, codes.length);
+    showProgress(done, codes.length);
+
+    // 批次間短暫等待，最後一批不需要
+    if(i + BATCH < codes.length) {
+      await new Promise(r => setTimeout(r, DELAY_MS));
+    }
   }
+
   livePriceTimestamp = Date.now();
+  hideProgress();
   hideLoading();
-  showToast('已更新 '+updated+' 檔現價', updated>0?'ok':'fail');
-  renderPerf(); renderLedger();
+  showToast('已更新 ' + updated + '/' + codes.length + ' 檔現價', updated > 0 ? 'ok' : 'fail');
+  renderPerf();
+  renderLedger();
 }
 
 async function fetchLivePricesForLedger() {
-  if(!currentLedgerDate || !ledger[currentLedgerDate]) { showToast('帳本是空的','fail'); return; }
-  const codes = [...new Set(ledger[currentLedgerDate].map(r=>r.code))];
-  showLoading(`更新 ${codes.length} 檔現價...`);
-  let updated = 0;
-  for(const code of codes) {
-    try {
-      const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=tse_${code}.tw`;
-      const r = await fetch(url);
-      const d = await r.json();
-      if(d.msgArray&&d.msgArray[0]) {
-        const z = d.msgArray[0].z;
-        if(z&&z!=='-') { livePrices[code]=parseFloat(z); updated++; }
-      }
-    } catch(e) {}
-    await new Promise(r=>setTimeout(r,120));
+  if(!currentLedgerDate || !ledger[currentLedgerDate] || ledger[currentLedgerDate].length === 0) {
+    showToast('帳本是空的', 'fail'); return;
   }
+
+  const codes = [...new Set(ledger[currentLedgerDate].map(r => r.code))];
+  showLoading(`更新 ${codes.length} 檔現價...`);
+  showProgress(0, codes.length);
+
+  const BATCH = 5;
+  const DELAY_MS = 80;
+  let updated = 0;
+  let done = 0;
+
+  for(let i = 0; i < codes.length; i += BATCH) {
+    const batch = codes.slice(i, i + BATCH);
+
+    await Promise.allSettled(
+      batch.map(async code => {
+        const price = await fetchOneLivePrice(code);
+        if(price !== null) { livePrices[code] = price; updated++; }
+      })
+    );
+
+    done = Math.min(i + BATCH, codes.length);
+    showProgress(done, codes.length);
+
+    if(i + BATCH < codes.length) {
+      await new Promise(r => setTimeout(r, DELAY_MS));
+    }
+  }
+
   livePriceTimestamp = Date.now();
+  hideProgress();
   hideLoading();
-  showToast('已更新 '+updated+'/'+codes.length+' 檔現價', updated>0?'ok':'fail');
+  showToast('已更新 ' + updated + '/' + codes.length + ' 檔現價', updated > 0 ? 'ok' : 'fail');
   renderLedger();
 }
 
@@ -972,13 +1039,6 @@ function exportPerf(type) {
   let data = getFilteredStocks().map(enrichStock);
   const today = new Date().toISOString().split('T')[0];
   const now = new Date();
-
-  if(type==='month') {
-    const y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0');
-    // For perf, just export current data with month label
-  } else if(type==='year') {
-    // Same, just label
-  }
 
   const rows = data.map(s => ({
     '日期': today,
@@ -1125,7 +1185,6 @@ function exportXlsxMultisheet(sheetsObj, filename) {
 }
 
 function styleXlsxHeader(ws, colCount) {
-  // Set column widths
   ws['!cols'] = Array(colCount).fill({wch:14});
 }
 
@@ -1190,7 +1249,6 @@ function renderCharts() {
   const cf = document.getElementById('chartCat').value;
   let stockData = (cf&&cf!=='all') ? STOCKS_RAW.filter(s=>s['分類']===cf) : STOCKS_RAW;
 
-  // Collect ledger data for selected ledger(s)
   let allLedgerData = [];
   if(lf==='all') {
     Object.keys(ledger).forEach(k=>(ledger[k]||[]).forEach(r=>allLedgerData.push({...r,_k:k})));
@@ -1266,7 +1324,7 @@ function renderCharts() {
 }
 
 // ============================================================
-// GAS (background-friendly)
+// GAS
 // ============================================================
 function saveGASUrl() {
   gasUrl = document.getElementById('gasUrl').value.trim();
