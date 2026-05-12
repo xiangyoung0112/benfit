@@ -1206,6 +1206,36 @@ async function fetchOneLivePriceProxy(code) {
   return null;
 }
 
+// 新增：用 CORS Proxy 批量查詢（一次送所有代號）
+async function fetchBatchPricesViaProxy(codes) {
+  const ex_ch = codes.map(c => `tse_${c}.tw|`).join('') +
+                codes.map(c => `otc_${c}.tw|`).join('');
+  const targetUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=${ex_ch}`;
+  const proxyUrl = buildProxyUrl(targetUrl);
+  if (!proxyUrl) return {};
+
+  try {
+    const res = await fetchWithTimeout(proxyUrl, 15000);
+    if (!res.ok) return {};
+    const d = JSON.parse(await res.text());
+    const result = {};
+    (d.msgArray || []).forEach(item => {
+      const code = item.c;
+      if (!code) return;
+      const price = (item.z && item.z !== '-' && item.z !== '')
+        ? parseFloat(item.z)
+        : (item.y && item.y !== '-' && item.y !== '')
+        ? parseFloat(item.y)
+        : 0;
+      if (price > 0) result[code] = price;
+    });
+    return result;
+  } catch(e) {
+    console.warn('批量 Proxy 失敗:', e.message);
+    return {};
+  }
+}
+
 async function _runBatchOrProxy(codes, label) {
   const mode = document.getElementById('proxyMode')?.value || proxyMode;
   // === GAS 批量優先 ===
@@ -1222,25 +1252,40 @@ async function _runBatchOrProxy(codes, label) {
     }
     showToast('GAS批量失敗，改逐檔查詢...', 'fail');
   }
-  // === CORS Proxy 逐檔 fallback ===
-  showLoading(`逐檔查詢 0/${codes.length}...`);
-  showProgress(0, codes.length);
-  let updated = 0, done = 0;
-  for(let i = 0; i < codes.length; i += 2) {
-    const batch = codes.slice(i, i+2);
-    await Promise.allSettled(batch.map(async code => {
-      const p = await fetchOneLivePriceProxy(code);
-      if(p) { livePrices[code] = p; updated++; }
-    }));
-    done = Math.min(i+2, codes.length);
-    showProgress(done, codes.length);
-    document.getElementById('loadingText').textContent = `逐檔查詢... ${done}/${codes.length} ✓${updated}`;
-    if(i+2 < codes.length) await new Promise(r => setTimeout(r, 1200));
+  // === CORS Proxy 批量查詢（一次送全部，避免 429）===
+  showLoading(`透過 Proxy 批量查詢 ${codes.length} 檔...`);
+  const prices = await fetchBatchPricesViaProxy(codes);
+  hideLoading();
+
+  let updated = 0;
+  codes.forEach(c => {
+    if (prices[c] > 0) { livePrices[c] = prices[c]; updated++; }
+  });
+
+  // 若批量失敗超過一半，才降級逐檔（每次2檔，間隔2秒）
+  const failed = codes.filter(c => !prices[c]);
+  if (failed.length > 0 && updated < codes.length / 2) {
+    showLoading(`批量部分失敗，補查 ${failed.length} 檔...`);
+    showProgress(0, failed.length);
+    let done = 0;
+    for (let i = 0; i < failed.length; i += 2) {
+      const batch = failed.slice(i, i + 2);
+      await Promise.allSettled(batch.map(async code => {
+        const p = await fetchOneLivePriceProxy(code);
+        if (p) { livePrices[code] = p; updated++; }
+      }));
+      done = Math.min(i + 2, failed.length);
+      showProgress(done, failed.length);
+      if (i + 2 < failed.length) await new Promise(r => setTimeout(r, 2000));
+    }
+    hideProgress();
+    hideLoading();
   }
+
   livePriceTimestamp = Date.now();
-  hideProgress(); hideLoading();
-  const msg = updated===codes.length?`✓ 全部 ${updated} 檔成功`:
-    updated>0?`⚠️ 部分成功 ${updated}/${codes.length}`:'✗ 全部失敗，請設定代理';
+  const msg = updated === codes.length ? `✓ 全部 ${updated} 檔成功`
+    : updated > 0 ? `⚠️ 部分成功 ${updated}/${codes.length}`
+    : '✗ 全部失敗，請確認 Proxy 設定';
   showToast(msg, updated > 0 ? 'ok' : 'fail');
   renderPerf(); renderLedger();
 }
@@ -1874,37 +1919,40 @@ function getBatchPrices(codes) {
   const needFetch = [];
 
   codes.forEach(code => {
-    if (cached[code]) result[code] = cached[code];
+    if (cached[code] && cached[code] > 0) result[code] = cached[code];
     else needFetch.push(code);
   });
 
-  // 即時查詢未快取的
   if (needFetch.length > 0) {
-    // 每次最多查 20 檔（避免逾時）
-    const chunk = needFetch.slice(0, 20);
-    const ex_ch = chunk.map(c => \`tse_\${c}.tw|\`).join('') +
-                  chunk.map(c => \`otc_\${c}.tw|\`).join('');
+    const chunk = needFetch.slice(0, 30);
+    // 同時帶 tse + otc，TWSE 會自動只回傳存在的那個
+    const ex_ch = chunk.map(c => 'tse_' + c + '.tw|').join('') +
+                  chunk.map(c => 'otc_' + c + '.tw|').join('');
     try {
-      const url = \`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=\${ex_ch}\`;
-      const res = UrlFetchApp.fetch(url, {muteHttpExceptions: true});
+      const url = 'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=' + ex_ch;
+      const res = UrlFetchApp.fetch(url, {
+        muteHttpExceptions: true,
+        headers: { 'Referer': 'https://mis.twse.com.tw/' }
+      });
       if (res.getResponseCode() === 200) {
         const data = JSON.parse(res.getContentText());
         (data.msgArray || []).forEach(item => {
           const code = item.c;
-          // z = 即時成交價，非交易時間為 '-'
-          // pz = 昨日收盤價，隨時都有值
-          // y = 昨日收盤（備用）
-          const price = (item.z && item.z !== '-') ? item.z
-                      : (item.pz && item.pz !== '-') ? item.pz
-                      : (item.y && item.y !== '-') ? item.y
-                      : null;
-          if (code && price) {
-            const p = parseFloat(price);
-            if (p > 0) result[code] = p;
-          }
+          if (!code) return;
+          // y = 昨日收盤（非交易時間唯一有值的欄位）
+          // z = 盤中成交價（盤中才有）
+          // 優先用 z（盤中），fallback 用 y（昨收）
+          const price = (item.z && item.z !== '-' && item.z !== '')
+            ? parseFloat(item.z)
+            : (item.y && item.y !== '-' && item.y !== '')
+            ? parseFloat(item.y)
+            : 0;
+          if (price > 0) result[code] = price;
         });
       }
-    } catch(e) {}
+    } catch(e) {
+      Logger.log('getBatchPrices error: ' + e.message);
+    }
   }
   return result;
 }
@@ -1932,12 +1980,14 @@ function updateAllPrices() {
       if (res.getResponseCode() === 200) {
         const data = JSON.parse(res.getContentText());
         (data.msgArray || []).forEach(item => {
-          const price = (item.z && item.z !== '-') ? item.z
-                      : (item.pz && item.pz !== '-') ? item.pz
-                      : (item.y && item.y !== '-') ? item.y
-                      : null;
-          if (item.c && price) {
-            allPrices[item.c] = { price: parseFloat(price), name: item.n || '', time: item.t || '' };
+          if (!item.c) return;
+          const price = (item.z && item.z !== '-' && item.z !== '')
+            ? parseFloat(item.z)
+            : (item.y && item.y !== '-' && item.y !== '')
+            ? parseFloat(item.y)
+            : 0;
+          if (price > 0) {
+            allPrices[item.c] = { price: price, name: item.n || '', time: item.t || '' };
           }
         });
       }
