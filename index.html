@@ -309,8 +309,9 @@ tbody td{padding:8px 12px;vertical-align:middle;}
     <button class="btn ghost" onclick="fetchLivePricesForLedger()">🔄 更新現價</button>
     <button class="btn ghost" onclick="openManualPriceModal()">✏️ 手動編輯現價</button>
     <button class="btn ghost" onclick="loadLedgerFromGAS()">☁️ 從GAS載入</button>
+    <button class="btn ghost" onclick="openAddLedgerModal()">📅 新增帳本</button>
     <button class="btn ghost" onclick="openAddManual()">＋ 手動新增</button>
-  </div>
+    
 
   <div id="ledgerPriceBanner" style="display:none;margin-bottom:10px;padding:8px 14px;background:var(--red-dim);border:1px solid var(--red2);border-radius:var(--r);font-size:12px;color:var(--red);">
     ⚠️ 現價尚未更新，損益數據為估算值。點「更新現價」取得即時行情。
@@ -1160,9 +1161,14 @@ async function testProxy() {
 async function fetchBatchPricesViaGAS(codes) {
   if(!gasUrl) return null;
   try {
-    const r = await fetch(gasUrl, {
-      method: 'POST', mode: 'cors', cache: 'no-cache', credentials: 'omit',
-      body: JSON.stringify({ action: 'getBatchPrices', codes })
+    // 改用 GET + query string，避免 GAS doPost 解析問題
+    const params = new URLSearchParams({
+      action: 'getBatchPrices',
+      codes: codes.join(',')
+    });
+    const r = await fetch(`${gasUrl}?${params.toString()}`, {
+      method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+      headers: {'Accept': 'application/json'}
     });
     if(!r.ok) return null;
     const d = await r.json();
@@ -1207,16 +1213,16 @@ async function _runBatchOrProxy(codes, label) {
   showLoading(`逐檔查詢 0/${codes.length}...`);
   showProgress(0, codes.length);
   let updated = 0, done = 0;
-  for(let i = 0; i < codes.length; i += 4) {
-    const batch = codes.slice(i, i+4);
+  for(let i = 0; i < codes.length; i += 2) {
+    const batch = codes.slice(i, i+2);
     await Promise.allSettled(batch.map(async code => {
       const p = await fetchOneLivePriceProxy(code);
       if(p) { livePrices[code] = p; updated++; }
     }));
-    done = Math.min(i+4, codes.length);
+    done = Math.min(i+2, codes.length);
     showProgress(done, codes.length);
     document.getElementById('loadingText').textContent = `逐檔查詢... ${done}/${codes.length} ✓${updated}`;
-    if(i+4 < codes.length) await new Promise(r => setTimeout(r, 250));
+    if(i+2 < codes.length) await new Promise(r => setTimeout(r, 1200));
   }
   livePriceTimestamp = Date.now();
   hideProgress(); hideLoading();
@@ -1660,14 +1666,20 @@ async function syncToGAS() {
 
 async function pushLedgerToGAS() {
   if(!gasUrl) return;
-  const flatLedger = [];
-  Object.keys(ledger).forEach(k=>(ledger[k]||[]).forEach(r=>flatLedger.push({...r,ledgerDate:k})));
-  const r = await fetch(gasUrl,{method:'POST',mode:'cors',cache:'no-cache',credentials:'omit',
-    body:JSON.stringify({action:'saveLedger',data:flatLedger})});
-  if(!r.ok) throw new Error(`HTTP ${r.status}`);
-  const d = await r.json();
-  if(d.error) throw new Error(d.error);
-  return d;
+  // 改為每個帳本日期分別送一次，確保 date 正確傳遞
+  const dates = Object.keys(ledger);
+  for(const ledgerDate of dates) {
+    const data = ledger[ledgerDate] || [];
+    const r = await fetch(gasUrl, {
+      method: 'POST', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+      body: JSON.stringify({ action: 'saveLedger', date: ledgerDate, data })
+    });
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    if(d.error) throw new Error(d.error);
+    // 每個帳本之間稍作等待，避免 GAS 過載
+    await new Promise(res => setTimeout(res, 300));
+  }
 }
 
 async function saveTodayPricesToGAS(stocks, date) {
@@ -1817,6 +1829,10 @@ function doGet(e) {
   const a = e.parameter.action;
   if (a === 'ping')            return json({status:'ok', time: new Date().toISOString()});
   if (a === 'getLedger')       return json({data: readAllLedgers()});
+  if (a === 'getBatchPrices') {
+    const codes = (e.parameter.codes || '').split(',').filter(Boolean);
+    return json({prices: getBatchPrices(codes)});
+  }
   if (a === 'updateAllPrices') { updateAllPrices(); return json({status:'ok'}); }
   return json({error:'unknown action'});
 }
