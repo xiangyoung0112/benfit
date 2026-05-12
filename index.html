@@ -9,29 +9,31 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0a0c10;--surface:#111418;--surface2:#181d24;--surface3:#1e252f;
-  --border:#252d38;--border2:#2e3a47;
-  --text:#e8edf3;--text2:#8a9ab0;--text3:#4a5a6a;
-  --green:#00d97e;--green2:#00a85f;--green-dim:rgba(0,217,126,0.12);
-  --red:#ff4d6d;--red2:#cc2d4a;--red-dim:rgba(255,77,109,0.12);
-  --blue:#3b9eff;--blue-dim:rgba(59,158,255,0.12);
-  --gold:#f5c842;--gold-dim:rgba(245,200,66,0.12);
-  --purple:#a78bfa;
+  --bg:#fdf6ef;--surface:#fff8f2;--surface2:#fef0e4;--surface3:#fde8d6;
+  --border:#f0d9c4;--border2:#e8c9ae;
+  --text:#3d2b1a;--text2:#7a5a3e;--text3:#b8926a;
+  --green:#1a9e5c;--green2:#16834d;--green-dim:rgba(26,158,92,0.12);
+  --red:#d94040;--red2:#b82e2e;--red-dim:rgba(217,64,64,0.12);
+  --blue:#c0622a;--blue-dim:rgba(192,98,42,0.12);
+  --gold:#c87d1a;--gold-dim:rgba(200,125,26,0.12);
+  --purple:#9b6fbf;
   --r:8px;--r2:12px;
+  --accent:#e07c3a;--accent2:#d4622a;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-serif;min-height:100vh;}
 ::-webkit-scrollbar{width:6px;height:6px;}
-::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-track{background:var(--surface2);}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:var(--text3);}
 
-.header{background:linear-gradient(135deg,#0d1117 0%,#111827 100%);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:16px;height:60px;position:sticky;top:0;z-index:100;flex-wrap:wrap;}
-.logo{font-size:17px;font-weight:900;color:var(--blue);letter-spacing:-0.5px;white-space:nowrap;}
+.header{background:linear-gradient(135deg,#fdf0e4 0%,#f9e8d5 100%);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:16px;height:60px;position:sticky;top:0;z-index:100;flex-wrap:wrap;box-shadow:0 2px 8px rgba(180,100,40,0.08);}
+.logo{font-size:17px;font-weight:900;color:var(--accent);letter-spacing:-0.5px;white-space:nowrap;}
 .logo span{color:var(--text2);font-weight:300;}
 .header-nav{display:flex;gap:4px;}
 .nav-btn{background:none;border:none;color:var(--text2);font-size:13px;font-family:inherit;padding:6px 12px;border-radius:var(--r);cursor:pointer;transition:all .2s;white-space:nowrap;}
 .nav-btn:hover{background:var(--surface2);color:var(--text);}
-.nav-btn.active{background:var(--blue-dim);color:var(--blue);font-weight:500;}
+.nav-btn.active{background:var(--blue-dim);color:var(--accent);font-weight:500;}
 .gas-btn{background:var(--gold-dim);border:1px solid rgba(245,200,66,0.3);color:var(--gold);font-size:12px;font-family:inherit;padding:6px 14px;border-radius:var(--r);cursor:pointer;transition:all .2s;white-space:nowrap;position:relative;}
 .gas-btn:hover{background:rgba(245,200,66,0.2);}
 .sync-indicator{position:absolute;top:-4px;right:-4px;width:8px;height:8px;border-radius:50%;background:var(--gold);display:none;animation:pulse 1.2s ease-in-out infinite;}
@@ -57,16 +59,16 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 
 .toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
 .toolbar select,.toolbar input{background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:7px 10px;border-radius:var(--r);outline:none;transition:border-color .2s;}
-.toolbar select:focus,.toolbar input:focus{border-color:var(--blue);}
+.toolbar select:focus,.toolbar input:focus{border-color:var(--accent);}
 .toolbar input[type=text]{width:180px;}
-.btn{background:var(--blue);border:none;color:#fff;font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:var(--r);cursor:pointer;transition:all .2s;white-space:nowrap;}
-.btn:hover{background:#2d8ae8;}
+.btn{background:var(--accent);border:none;color:#fff;font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:var(--r);cursor:pointer;transition:all .2s;white-space:nowrap;}
+.btn:hover{background:var(--accent2);}
 .btn.green{background:var(--green2);}
 .btn.green:hover{background:#007d47;}
 .btn.red{background:var(--red2);}
 .btn.red:hover{background:#a01f35;}
 .btn.ghost{background:var(--surface2);border:1px solid var(--border2);color:var(--text2);}
-.btn.ghost:hover{border-color:var(--blue);color:var(--blue);}
+.btn.ghost:hover{border-color:var(--accent);color:var(--accent);}
 .btn.gold{background:rgba(245,200,66,0.15);border:1px solid rgba(245,200,66,0.4);color:var(--gold);}
 .btn.gold:hover{background:rgba(245,200,66,0.25);}
 .spacer{flex:1;}
@@ -75,7 +77,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 .cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
 .cat-tab{background:var(--surface);border:1px solid var(--border);color:var(--text2);font-size:12px;font-family:inherit;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all .2s;}
 .cat-tab:hover{border-color:var(--border2);color:var(--text);}
-.cat-tab.active{background:var(--blue-dim);border-color:var(--blue);color:var(--blue);}
+.cat-tab.active{background:var(--blue-dim);border-color:var(--accent);color:var(--accent);}
 
 .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);overflow:auto;}
 table{width:100%;border-collapse:collapse;font-size:13px;}
@@ -98,15 +100,15 @@ tbody td{padding:8px 12px;vertical-align:middle;}
 .ledger-tab-btn{background:var(--surface);border:none;border-right:1px solid var(--border);color:var(--text2);font-family:inherit;font-size:12px;padding:8px 16px;cursor:pointer;transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:6px;}
 .ledger-tab-btn:last-child{border-right:none;}
 .ledger-tab-btn:hover{background:var(--surface2);color:var(--text);}
-.ledger-tab-btn.active{background:var(--blue-dim);color:var(--blue);font-weight:600;}
+.ledger-tab-btn.active{background:var(--blue-dim);color:var(--accent);font-weight:600;}
 .ledger-tab-btn .tab-count{font-size:10px;background:var(--border2);padding:1px 5px;border-radius:8px;}
-.ledger-tab-btn.active .tab-count{background:rgba(59,158,255,0.3);}
+.ledger-tab-btn.active .tab-count{background:rgba(192,98,42,0.25);}
 .add-ledger-tab{background:var(--surface);border:none;border-right:none;color:var(--text3);font-family:inherit;font-size:14px;padding:8px 14px;cursor:pointer;transition:all .2s;}
-.add-ledger-tab:hover{color:var(--blue);background:var(--blue-dim);}
+.add-ledger-tab:hover{color:var(--accent);background:var(--blue-dim);}
 
 /* Export dropdown */
 .export-wrap{position:relative;display:inline-block;}
-.export-menu{position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r);padding:4px;min-width:160px;z-index:50;display:none;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+.export-menu{position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r);padding:4px;min-width:160px;z-index:50;display:none;box-shadow:0 8px 24px rgba(160,80,20,0.18);}
 .export-menu.open{display:block;}
 .export-item{padding:7px 12px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--text2);transition:background .12s;}
 .export-item:hover{background:var(--surface2);color:var(--text);}
@@ -118,14 +120,14 @@ tbody td{padding:8px 12px;vertical-align:middle;}
 .chart-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:14px;}
 .chart-wrap{position:relative;height:240px;}
 
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-bg{position:fixed;inset:0;background:rgba(80,40,10,.55);z-index:200;display:none;align-items:center;justify-content:center;padding:20px;}
 .modal-bg.open{display:flex;}
-.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--r2);padding:24px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto;}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--r2);padding:24px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto;box-shadow:0 12px 40px rgba(160,80,20,0.18);}
 .modal h3{font-size:16px;margin-bottom:16px;}
 .form-group{margin-bottom:13px;}
 .form-label{font-size:12px;color:var(--text2);margin-bottom:5px;display:block;}
 .form-input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:8px 10px;border-radius:var(--r);outline:none;}
-.form-input:focus{border-color:var(--blue);}
+.form-input:focus{border-color:var(--accent);}
 .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;}
 
 .gas-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:20px;margin-bottom:20px;}
@@ -137,15 +139,15 @@ tbody td{padding:8px 12px;vertical-align:middle;}
 .status-dot.ok{background:var(--green);}
 .status-dot.err{background:var(--red);}
 
-.loading-overlay{position:fixed;inset:0;background:rgba(10,12,16,.82);z-index:300;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+.loading-overlay{position:fixed;inset:0;background:rgba(253,246,239,.88);z-index:300;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
 .loading-overlay.show{display:flex;}
-.spinner{width:38px;height:38px;border:3px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin .75s linear infinite;}
+.spinner{width:38px;height:38px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .75s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .loading-text{color:var(--text2);font-size:14px;}
 
 /* Progress bar for batch fetch */
 .progress-bar-wrap{width:220px;height:4px;background:var(--border2);border-radius:2px;overflow:hidden;}
-.progress-bar{height:100%;background:var(--blue);border-radius:2px;transition:width .2s ease;}
+.progress-bar{height:100%;background:var(--accent);border-radius:2px;transition:width .2s ease;}
 
 .stock-picker{display:grid;grid-template-columns:1fr 1fr;gap:14px;height:380px;}
 .picker-list{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);overflow-y:auto;padding:6px;}
@@ -165,7 +167,7 @@ tbody td{padding:8px 12px;vertical-align:middle;}
 /* Period selector */
 .period-tabs{display:flex;gap:4px;background:var(--surface2);padding:3px;border-radius:var(--r);border:1px solid var(--border);}
 .period-tab{background:none;border:none;color:var(--text3);font-size:12px;font-family:inherit;padding:4px 12px;border-radius:6px;cursor:pointer;transition:all .2s;}
-.period-tab.active{background:var(--blue);color:#fff;font-weight:600;}
+.period-tab.active{background:var(--accent);color:#fff;font-weight:600;}
 
 /* Live price badge in ledger */
 .live-badge{font-size:9px;padding:1px 5px;border-radius:4px;background:var(--green-dim);color:var(--green);font-weight:600;vertical-align:middle;margin-left:4px;}
@@ -203,6 +205,7 @@ tbody td{padding:8px 12px;vertical-align:middle;}
     <button class="nav-btn" onclick="showPage('settings',this)">⚙️ 設定</button>
   </div>
   <div class="date-badge" id="dateBadge">--</div>
+  <div class="date-badge" id="proxyBadge" style="background:var(--green-dim);border-color:var(--green);color:var(--green2);">🌐 GAS代理</div>
   <button class="gas-btn" onclick="syncToGAS()">☁️ 同步GAS<div class="sync-indicator" id="syncIndicator"></div></button>
 </div>
 
@@ -360,7 +363,37 @@ tbody td{padding:8px 12px;vertical-align:middle;}
   </div>
 
   <div class="gas-panel">
-    <h3>📁 上傳股票數據檔案</h3>
+    <h3>🌐 代理 Proxy 設定（現價查詢）</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">
+      瀏覽器直接連線台灣證交所 API 時會被 CORS 封鎖。選擇一個代理方式：<br>
+      <b>方案1</b>（推薦）：填入你的 <b>GAS URL</b>（上方），系統會透過 GAS 抓取現價。<br>
+      <b>方案2</b>：使用公開 CORS Proxy（速度較慢，有流量限制）。<br>
+      <b>方案3</b>：自訂 Proxy URL，格式：<code style="font-size:11px;background:var(--surface3);padding:1px 5px;border-radius:3px;">{url}</code> 會被替換為目標網址。
+    </p>
+    <div class="gas-row" style="gap:10px;flex-wrap:wrap;align-items:flex-start;">
+      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:260px;">
+        <label style="font-size:12px;color:var(--text2);">代理模式</label>
+        <select id="proxyMode" onchange="onProxyModeChange()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:8px 10px;border-radius:var(--r);outline:none;">
+          <option value="gas">透過 GAS 代理（推薦）</option>
+          <option value="allorigins">allorigins.win（公開）</option>
+          <option value="corsproxy">corsproxy.io（公開）</option>
+          <option value="custom">自訂 Proxy URL</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;flex:2;min-width:300px;" id="customProxyWrap">
+        <label style="font-size:12px;color:var(--text2);">自訂 Proxy URL（含 <code style="font-size:11px;">{url}</code> 佔位符）</label>
+        <input class="gas-input" id="customProxyUrl" placeholder="https://your-proxy.example.com/?url={url}" style="width:100%;">
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+      <button class="btn ghost" onclick="testProxy()">🔌 測試 Proxy</button>
+      <button class="btn" onclick="saveProxySettings()">💾 儲存設定</button>
+      <div class="status-dot" id="proxyStatus"></div>
+      <span id="proxyStatusText" style="font-size:12px;color:var(--text2);"></span>
+    </div>
+  </div>
+
+
     <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">上傳股票數據檔案（JSON / CSV / XLSX），系統會在本地HTML中載入。<br/>注意：股票數據僅保存在本地瀏覽器，需要定期備份。</p>
     <div class="gas-row">
       <input type="file" id="dataFile" accept=".json,.csv,.xls,.xlsx" style="flex:1;">
@@ -536,6 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   gasUrl = localStorage.getItem('gasUrl') || '';
   if(gasUrl) document.getElementById('gasUrl').value = gasUrl;
+  loadProxySettings();
 
   STOCKS_RAW.forEach(s => { livePrices[s['代號']] = s['現價']; });
   buildCatTabs();
@@ -1026,31 +1060,156 @@ async function fetchWithTimeout(url, timeoutMs = 8000) {
   }
 }
 
+// ============================================================
+// PROXY SETTINGS
+// ============================================================
+let proxyMode = 'gas';
+let customProxyUrl = '';
+
+function loadProxySettings() {
+  proxyMode = localStorage.getItem('proxyMode') || 'gas';
+  customProxyUrl = localStorage.getItem('customProxyUrl') || '';
+  const sel = document.getElementById('proxyMode');
+  if(sel) sel.value = proxyMode;
+  const inp = document.getElementById('customProxyUrl');
+  if(inp) inp.value = customProxyUrl;
+  onProxyModeChange();
+}
+
+function saveProxySettings() {
+  proxyMode = document.getElementById('proxyMode').value;
+  customProxyUrl = document.getElementById('customProxyUrl').value.trim();
+  localStorage.setItem('proxyMode', proxyMode);
+  localStorage.setItem('customProxyUrl', customProxyUrl);
+  showToast('Proxy 設定已儲存', 'ok');
+}
+
+function onProxyModeChange() {
+  const mode = document.getElementById('proxyMode')?.value;
+  const wrap = document.getElementById('customProxyWrap');
+  if(wrap) wrap.style.display = (mode === 'custom') ? 'flex' : 'none';
+  // update header badge
+  const badge = document.getElementById('proxyBadge');
+  if(badge) {
+    const labels = {gas:'🌐 GAS代理', allorigins:'🌐 allorigins代理', corsproxy:'🌐 corsproxy代理', custom:'🌐 自訂代理'};
+    badge.textContent = labels[mode] || '🌐 代理';
+  }
+}
+
+function buildProxyUrl(targetUrl) {
+  const mode = document.getElementById('proxyMode')?.value || proxyMode;
+  if(mode === 'gas') return null; // handled separately
+  if(mode === 'allorigins') return `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+  if(mode === 'corsproxy') return `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+  if(mode === 'custom') {
+    const tmpl = document.getElementById('customProxyUrl')?.value || customProxyUrl;
+    return tmpl.replace('{url}', encodeURIComponent(targetUrl));
+  }
+  return null;
+}
+
+async function testProxy() {
+  const statusDot = document.getElementById('proxyStatus');
+  const statusText = document.getElementById('proxyStatusText');
+  statusDot.className = 'status-dot';
+  statusText.textContent = '測試中...';
+
+  const mode = document.getElementById('proxyMode').value;
+  if(mode === 'gas') {
+    // test via GAS
+    const url = document.getElementById('gasUrl').value.trim() || gasUrl;
+    if(!url) { statusDot.className='status-dot err'; statusText.textContent='請先設定 GAS URL'; return; }
+    try {
+      showLoading('測試 GAS 代理...');
+      const r = await fetch(`${url}?action=getPrice&code=2330`);
+      const d = await r.json();
+      hideLoading();
+      if(d.price && d.price > 0) {
+        statusDot.className='status-dot ok';
+        statusText.textContent=`GAS代理 OK！台積電現價: ${d.price}`;
+      } else {
+        statusDot.className='status-dot err';
+        statusText.textContent='GAS回應但無法取得現價，請確認GAS程式碼已部署';
+      }
+    } catch(e) { hideLoading(); statusDot.className='status-dot err'; statusText.textContent='連線失敗: '+e.message; }
+    return;
+  }
+
+  // Test with a known stock (2330 TSMC)
+  const testUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=tse_2330.tw`;
+  const proxyUrl = buildProxyUrl(testUrl);
+  if(!proxyUrl) { statusDot.className='status-dot err'; statusText.textContent='無法建立 Proxy URL'; return; }
+  
+  try {
+    showLoading('測試 Proxy 連線...');
+    const res = await fetchWithTimeout(proxyUrl, 12000);
+    const text = await res.text();
+    const d = JSON.parse(text);
+    hideLoading();
+    const z = d.msgArray?.[0]?.z;
+    if(z && z !== '-') {
+      statusDot.className='status-dot ok';
+      statusText.textContent=`Proxy OK！台積電現價: ${z}`;
+    } else {
+      statusDot.className='status-dot err';
+      statusText.textContent='Proxy回應但無現價資料（非交易時間？）';
+    }
+  } catch(e) {
+    hideLoading();
+    statusDot.className='status-dot err';
+    statusText.textContent='Proxy 失敗: '+e.message;
+  }
+}
+
+// ============================================================
+// LIVE PRICE FETCH - via GAS proxy or CORS proxy
+// ============================================================
+
+async function fetchOneLivePriceViaGAS(code) {
+  if(!gasUrl) return null;
+  try {
+    const r = await fetchWithTimeout(`${gasUrl}?action=getPrice&code=${code}`, 12000);
+    if(!r.ok) return null;
+    const d = await r.json();
+    if(d.price && d.price > 0) return d.price;
+  } catch(e) {}
+  return null;
+}
+
 async function fetchOneLivePrice(code) {
   console.log(`🔍 開始查詢: ${code}`);
-  
-  // 嘗試查詢 TWSE/OTC API
+  const mode = document.getElementById('proxyMode')?.value || proxyMode;
+
+  // GAS mode: delegate to GAS
+  if(mode === 'gas') {
+    if(gasUrl) {
+      const price = await fetchOneLivePriceViaGAS(code);
+      if(price) { console.log(`  ✓ GAS代理: ${code} = ${price}`); return price; }
+      console.warn(`  ✗ GAS代理失敗，改用直連...`);
+    }
+  }
+
+  // Try direct or proxied
   for(let attempt = 0; attempt < 2; attempt++) {
     const isOTC = attempt === 1;
     const exchange = isOTC ? 'otc' : 'tse';
-    const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=5&ex_ch=${exchange}_${code}.tw`;
+    const targetUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=5&ex_ch=${exchange}_${code}.tw`;
     
+    let url;
+    if(mode === 'gas') {
+      // GAS already failed, try direct
+      url = targetUrl;
+    } else {
+      url = buildProxyUrl(targetUrl) || targetUrl;
+    }
+
     try {
-      console.debug(`  [${attempt + 1}/2] 嘗試 ${exchange.toUpperCase()} API...`);
+      console.debug(`  [${attempt + 1}/2] 嘗試 ${exchange.toUpperCase()}${mode !== 'gas' ? ' (proxy)' : ''}...`);
       const res = await fetchWithTimeout(url, 10000);
-      
-      if(!res.ok) {
-        console.debug(`  ✗ HTTP ${res.status}`);
-        continue;
-      }
-      
-      const d = await res.json();
-      
-      if(!d.msgArray || d.msgArray.length === 0) {
-        console.debug(`  ✗ 無資料`);
-        continue;
-      }
-      
+      if(!res.ok) { console.debug(`  ✗ HTTP ${res.status}`); continue; }
+      const text = await res.text();
+      const d = JSON.parse(text);
+      if(!d.msgArray || d.msgArray.length === 0) { console.debug(`  ✗ 無資料`); continue; }
       const z = d.msgArray[0].z;
       if(z && z !== '-' && z !== '') {
         const price = parseFloat(z);
@@ -1060,15 +1219,16 @@ async function fetchOneLivePrice(code) {
         }
       }
       console.debug(`  ✗ 價格無效: ${z}`);
-      
     } catch(e) {
       console.debug(`  ✗ ${exchange.toUpperCase()} 錯誤: ${e.message}`);
     }
   }
   
-  console.warn(`❌ 無法查詢 ${code} - TWSE API 失敗，使用本地緩存價格`);
+  console.warn(`❌ 無法查詢 ${code}`);
   return null;
 }
+
+
 
 async function fetchLivePrices() {
   const visible = getFilteredStocks().slice(0, 60);
@@ -1484,9 +1644,9 @@ function renderCharts() {
     type:'doughnut',
     data:{labels:catKeys.map(k=>CAT_LABELS[k]||k),
       datasets:[{data:catKeys.map(k=>catCounts[k]),
-        backgroundColor:catKeys.map(k=>CAT_COLORS[k]||'#666'),borderWidth:2,borderColor:'#111418'}]},
+        backgroundColor:catKeys.map(k=>CAT_COLORS[k]||'#666'),borderWidth:2,borderColor:'#fdf6ef'}]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'right',labels:{color:'#8a9ab0',font:{size:11}}}}}
+      plugins:{legend:{position:'right',labels:{color:'#7a5a3e',font:{size:11}}}}}
   });
 
   const pnlPcts=allLedgerData.map(r=>{
@@ -1502,8 +1662,8 @@ function renderCharts() {
     data:{labels:bLabels,datasets:[{data:bCounts,
       backgroundColor:bLabels.map((_,i)=>i<5?'rgba(255,77,109,0.6)':'rgba(0,217,126,0.6)'),borderRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-      scales:{x:{ticks:{color:'#8a9ab0',font:{size:9}},grid:{color:'#1e252f'}},
-               y:{ticks:{color:'#8a9ab0'},grid:{color:'#1e252f'}}}}
+      scales:{x:{ticks:{color:'#7a5a3e',font:{size:9}},grid:{color:'#f0d9c4'}},
+               y:{ticks:{color:'#7a5a3e'},grid:{color:'#f0d9c4'}}}}
   });
 
   const catPnls={};
@@ -1521,8 +1681,8 @@ function renderCharts() {
         backgroundColor:pnlCatKeys.map(k=>catPnls[k]>=0?'rgba(0,217,126,0.8)':'rgba(255,77,109,0.8)'),
         borderRadius:6}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-      scales:{x:{ticks:{color:'#8a9ab0'},grid:{color:'#1e252f'}},
-               y:{ticks:{color:'#8a9ab0',callback:v=>v.toLocaleString()+'元'},grid:{color:'#1e252f'}}}}
+      scales:{x:{ticks:{color:'#7a5a3e'},grid:{color:'#f0d9c4'}},
+               y:{ticks:{color:'#7a5a3e',callback:v=>v.toLocaleString()+'元'},grid:{color:'#f0d9c4'}}}}
   });
 
   // 新增各分類損益百分比圖表
@@ -1537,8 +1697,8 @@ function renderCharts() {
         backgroundColor:catPcts.map(p=>p>=0?'rgba(0,217,126,0.8)':'rgba(255,77,109,0.8)'),
         borderRadius:6}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-      scales:{x:{ticks:{color:'#8a9ab0'},grid:{color:'#1e252f'}},
-               y:{ticks:{color:'#8a9ab0',callback:v=>v.toFixed(1)+'%'},grid:{color:'#1e252f'}}}}
+      scales:{x:{ticks:{color:'#7a5a3e'},grid:{color:'#f0d9c4'}},
+               y:{ticks:{color:'#7a5a3e',callback:v=>v.toFixed(1)+'%'},grid:{color:'#f0d9c4'}}}}
   });
 
   const ledDisplay=allLedgerData.slice(-50);
@@ -1553,8 +1713,8 @@ function renderCharts() {
         return r.shares*(lp-r.buyPrice)>=0?'rgba(0,217,126,0.65)':'rgba(255,77,109,0.65)';
       }),borderRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-      scales:{x:{ticks:{color:'#8a9ab0',font:{size:10},maxRotation:45},grid:{color:'#1e252f'}},
-               y:{ticks:{color:'#8a9ab0',callback:v=>v.toLocaleString()+'元'},grid:{color:'#1e252f'}}}}
+      scales:{x:{ticks:{color:'#7a5a3e',font:{size:10},maxRotation:45},grid:{color:'#f0d9c4'}},
+               y:{ticks:{color:'#7a5a3e',callback:v=>v.toLocaleString()+'元'},grid:{color:'#f0d9c4'}}}}
   });
 }
 
