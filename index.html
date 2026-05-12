@@ -774,7 +774,7 @@ function renderPerf() {
       <td class="name">${s['名稱']}</td>
       <td><span class="cat-tag" style="background:${cc}22;color:${cc}">${cl}</span></td>
       <td class="score" style="color:var(--gold)">${s['貝氏評分'].toFixed(2)}</td>
-      <td class="price-cell">${s['現價'].toFixed(2)}</td>
+      <td class="price-cell" style="${s._live !== s['現價'] ? 'color:var(--accent);font-weight:600;' : ''}">${s._live.toFixed(2)}</td>
       <td class="change-cell ${chgCls}">${chgStr}</td>
       <td class="price-cell">${s._shares>0?s._shares+' 股':'--'}</td>
       <td class="pnl-cell ${pnlCls}">${pnlStr}</td>
