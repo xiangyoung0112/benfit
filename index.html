@@ -774,7 +774,7 @@ function renderPerf() {
       <td class="name">${s['名稱']}</td>
       <td><span class="cat-tag" style="background:${cc}22;color:${cc}">${cl}</span></td>
       <td class="score" style="color:var(--gold)">${s['貝氏評分'].toFixed(2)}</td>
-      <td class="price-cell" style="${s._live !== s['現價'] ? 'color:var(--accent);font-weight:600;' : ''}">${s._live.toFixed(2)}</td>
+      <td class="price-cell">${s['現價'].toFixed(2)}</td>
       <td class="change-cell ${chgCls}">${chgStr}</td>
       <td class="price-cell">${s._shares>0?s._shares+' 股':'--'}</td>
       <td class="pnl-cell ${pnlCls}">${pnlStr}</td>
@@ -2129,29 +2129,7 @@ function json(obj) {
 function fetchAllMarketPrices() {
   const result = {};
 
-  // 1. 上市 TWSE
-  try {
-    const res = UrlFetchApp.fetch(
-      'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL',
-      { muteHttpExceptions: true }
-    );
-    if (res.getResponseCode() === 200) {
-      const data = JSON.parse(res.getContentText());
-      data.forEach(item => {
-        const code = (item.Code || '').trim();
-        const raw  = (item.ClosingPrice || '').replace(/,/g, '');
-        const price = parseFloat(raw);
-        if (code && price > 0) result[code] = price;
-      });
-      Logger.log('[TWSE] 載入 ' + Object.keys(result).length + ' 筆');
-    } else {
-      Logger.log('[TWSE] 狀態碼: ' + res.getResponseCode());
-    }
-  } catch(e) {
-    Logger.log('[TWSE] 錯誤: ' + e.message);
-  }
-
-  // 2. 上櫃 TPEx
+  // 1. 先抓 TPEx 上櫃（通常較早更新）
   try {
     const res = UrlFetchApp.fetch(
       'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes',
@@ -2159,19 +2137,50 @@ function fetchAllMarketPrices() {
     );
     if (res.getResponseCode() === 200) {
       const data = JSON.parse(res.getContentText());
+      // 只用今天的資料
+      const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyyMMdd');
+      const rocToday = (parseInt(today.substring(0,4)) - 1911) + today.substring(4);
       data.forEach(item => {
+        if(item.Date !== rocToday) return; // 跳過非今日資料
         const code  = (item.SecuritiesCompanyCode || '').trim();
         const price = parseFloat(item.Close);
         if (code && price > 0) result[code] = price;
       });
-      Logger.log('[TPEx] 載入完成，總計 ' + Object.keys(result).length + ' 筆');
-    } else {
-      Logger.log('[TPEx] 狀態碼: ' + res.getResponseCode());
+      Logger.log('[TPEx] 今日(' + rocToday + ') 載入: ' + Object.keys(result).length + ' 筆');
     }
   } catch(e) {
     Logger.log('[TPEx] 錯誤: ' + e.message);
   }
 
+  // 2. 再抓 TWSE 上市（補查 TPEx 沒有的）
+  try {
+    const res = UrlFetchApp.fetch(
+      'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL',
+      { muteHttpExceptions: true }
+    );
+    if (res.getResponseCode() === 200) {
+      const data = JSON.parse(res.getContentText());
+      const dataDate = data[0]?.Date || '';
+      const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyyMMdd');
+      const rocToday = (parseInt(today.substring(0,4)) - 1911) + today.substring(4);
+      
+      if(dataDate === rocToday) {
+        // 今日資料才用
+        data.forEach(item => {
+          const code  = (item.Code || '').trim();
+          const price = parseFloat((item.ClosingPrice || '').replace(/,/g, ''));
+          if (code && price > 0) result[code] = price;
+        });
+        Logger.log('[TWSE] 今日資料載入完成');
+      } else {
+        Logger.log('[TWSE] 資料日期(' + dataDate + ')非今日(' + rocToday + ')，略過');
+      }
+    }
+  } catch(e) {
+    Logger.log('[TWSE] 錯誤: ' + e.message);
+  }
+
+  Logger.log('[總計] ' + Object.keys(result).length + ' 筆');
   return result;
 }
 
