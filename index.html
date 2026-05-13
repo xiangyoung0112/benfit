@@ -787,7 +787,7 @@ let ledgerSortDir = -1;
           <td class="price-cell">${s._shares>0?s._shares+' 股':'--'}</td>
           <td class="pnl-cell ${pnlCls}">${pnlStr}</td>
           <td class="pct-cell ${pnlCls}">${pctStr}</td>
-          <td><button class="btn ghost" style="padding:3px 9px;font-size:11px;" onclick="addOneLedger('${s['代號']}','${s['名稱']}','${s['分類']}',${s['現價']},${s['貝氏評分']})">＋帳本</button></td>
+          <td><button class="btn ghost" style="padding:3px 9px;font-size:11px;" onclick="addOneLedger('${s['代號']}','${s['名稱']}','${String(s['分類']).replace(/,/g,'|')}',${s['現價']},${s['貝氏評分']})">＋帳本</button></td>
         </tr>`;
       }).join('');
       renderSummaryCards(data);
@@ -814,6 +814,7 @@ let ledgerSortDir = -1;
     // LEDGER
     // ============================================================
     function addOneLedger(code, name, cat, price, score) {
+      cat = String(cat).replace(/\|/g, ',');
       const targetDate = document.getElementById('saveLedgerSelect').value;
       const today = new Date().toISOString().split('T')[0];
       const shares = calcShares(price);
@@ -841,10 +842,10 @@ let ledgerSortDir = -1;
       data.forEach(s => {
         const shares = calcShares(s['現價']);
         if(shares <= 0) { skipped++; return; }
-        // 檢查在目標帳本中，是否已有「同交易日」的「同一支股票」
-        if(ledger[targetDate].find(r => r.code === s['代號'] && r.date === today)) { 
-          skipped++; 
-          return; 
+        // 檢查在目標帳本中，是否已有「同交易日」、「同一支股票」且「同分類」
+        if(ledger[targetDate].find(r => r.code === s['代號'] && r.date === today && r.cat === s['分類'])) {
+          skipped++;
+          return;
         }
         ledger[targetDate].push({ 
           date: today, // 交易日固定為今天
