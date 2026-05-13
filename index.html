@@ -173,6 +173,10 @@
     .live-badge{font-size:9px;padding:1px 5px;border-radius:4px;background:var(--green-dim);color:var(--green);font-weight:600;vertical-align:middle;margin-left:4px;}
     .live-badge.stale{background:var(--red-dim);color:var(--red);}
 
+    .price-cache-badge{background:var(--surface2);border:1px solid var(--border);padding:4px 10px;border-radius:var(--r);font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+    .price-cache-badge.fresh{border-color:var(--green);color:var(--green2);}
+    .price-cache-badge.stale{border-color:var(--gold);color:var(--gold);}
+
     @media(max-width:768px){
       .charts-grid{grid-template-columns:1fr;}
       .stock-picker{grid-template-columns:1fr;height:auto;}
@@ -206,6 +210,7 @@
       </div>
       <div class="date-badge" id="dateBadge">--</div>
       <div class="date-badge" id="proxyBadge" style="background:var(--green-dim);border-color:var(--green);color:var(--green2);">🌐 GAS代理</div>
+      <div class="price-cache-badge" id="priceCacheBadge">現價 --</div>
       <button class="gas-btn" onclick="syncToGAS()">☁️ 同步GAS<div class="sync-indicator" id="syncIndicator"></div></button>
     </div>
 
@@ -310,6 +315,7 @@
         </div>
 
         <button class="btn ghost" onclick="fetchLivePricesForLedger()">🔄 更新現價</button>
+        <button class="btn ghost" onclick="fetchAllLedgerPrices()">⚡ 全帳本更新現價</button>
         <button class="btn ghost" onclick="openManualPriceModal()">✏️ 手動編輯現價</button>
         <button class="btn ghost" onclick="loadLedgerFromGAS()">☁️ 從GAS載入</button>
         <button class="btn ghost" onclick="openAddLedgerModal()">📅 新增帳本</button>
@@ -344,6 +350,13 @@
         <select id="chartCat" onchange="renderCharts()"><option value="all">全部分類</option></select>
         <div class="spacer"></div>
         <button class="btn ghost" onclick="renderCharts()">🔄 重繪</button>
+
+        <!-- ▼ 新增：動態分類回測工具列 -->
+        <label style="font-size:12px;color:var(--text2);white-space:nowrap;">區間回測</label>
+        <input type="date" id="backtestStart" title="開始日期">
+        <input type="date" id="backtestEnd" title="結束日期">
+        <button class="btn ghost" onclick="fetchAllLedgerPrices()">⚡ 全帳本更新現價</button>
+        <button class="btn" onclick="runBacktest()">📊 執行區間回測</button>
       </div>
       <div class="charts-grid">
         <div class="chart-card"><div class="chart-title">各分類股票數量</div><div class="chart-wrap"><canvas id="catPieChart"></canvas></div></div>
@@ -351,6 +364,17 @@
         <div class="chart-card full"><div class="chart-title">各分類總損益 (NTD)</div><div class="chart-wrap" style="height:260px"><canvas id="scoreBarChart"></canvas></div></div>
         <div class="chart-card full"><div class="chart-title">各分類損益百分比</div><div class="chart-wrap" style="height:260px"><canvas id="catPctChart"></canvas></div></div>
         <div class="chart-card full"><div class="chart-title">帳務本各標的損益 (NTD)</div><div class="chart-wrap" style="height:300px"><canvas id="ledgerBarChart"></canvas></div></div>
+      </div>
+      <!-- ▼ 新增：動態分類回測結果區 -->
+      <div id="backtestResult" style="display:none;margin-top:24px;">
+        <div style="font-size:14px;font-weight:600;color:var(--text2);margin-bottom:14px;" id="backtestTitle"></div>
+        <div class="charts-grid">
+          <div class="chart-card full">
+            <div class="chart-title">各策略損益率（%）</div>
+            <div class="chart-wrap" style="height:280px;"><canvas id="backtestBarChart"></canvas></div>
+          </div>
+        </div>
+        <div id="backtestCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:16px;"></div>
       </div>
     </div>
 
@@ -624,6 +648,8 @@ let ledgerSortDir = -1;
       updateSaveLedgerSelect();
       renderPerf();
       renderGASCode();
+
+      loadPricesFromLocal();
 
       if(gasUrl) {
         loadLedgerFromGAS(true);
@@ -1112,6 +1138,7 @@ function sortLedgerBy(col) {
         status.textContent = `✓ 成功套用 ${success} 筆現價`;
         status.style.color = 'var(--green)';
         livePriceTimestamp = Date.now();
+        savePricesToLocal();
         renderPerf();
         renderLedger();
         setTimeout(() => {
@@ -1377,6 +1404,7 @@ function sortLedgerBy(col) {
           let updated = 0;
           codes.forEach(c => { if(prices[c] > 0) { livePrices[c] = prices[c]; updated++; } });
           livePriceTimestamp = Date.now();
+        savePricesToLocal();
           const msg = updated === codes.length
             ? `✓ 全部 ${updated} 檔成功`
             : updated > 0 ? `⚠️ 部分成功 ${updated}/${codes.length}`
@@ -1415,6 +1443,7 @@ function sortLedgerBy(col) {
       }
 
       livePriceTimestamp = Date.now();
+      savePricesToLocal();
       const msg = updated === codes.length ? `✓ 全部 ${updated} 檔成功`
         : updated > 0 ? `⚠️ 部分成功 ${updated}/${codes.length}`
         : '✗ 全部失敗，請確認 Proxy 設定';
@@ -2395,6 +2424,224 @@ function sortLedgerBy(col) {
     document.querySelectorAll('.modal-bg').forEach(bg=>{
       bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('open');});
     });
+
+    // ============================================================
+    // 動態分類回測（Dynamic Category Backtest）
+    // ============================================================
+    function runBacktest() {
+      const startStr = document.getElementById('backtestStart').value;
+      const endStr   = document.getElementById('backtestEnd').value;
+
+      if (!startStr || !endStr) {
+        showToast('請選擇開始與結束日期', 'fail');
+        return;
+      }
+      if (startStr > endStr) {
+        showToast('開始日期不可晚於結束日期', 'fail');
+        return;
+      }
+
+      // ── 1. 虛擬聚合帳本：提取落在區間內的所有股票（保持獨立，不合併）
+      const virtualLedger = [];
+      Object.entries(ledger).forEach(([date, stocks]) => {
+        if (date >= startStr && date <= endStr) {
+          stocks.forEach(stock => virtualLedger.push({ ...stock, _ledgerDate: date }));
+        }
+      });
+
+      if (virtualLedger.length === 0) {
+        showToast('此區間無任何帳本資料', 'fail');
+        return;
+      }
+
+      // ── 2. 對齊最新現價（查無現價則 fallback 到 buyPrice）
+      virtualLedger.forEach(stock => {
+        stock._livePrice = (livePrices[stock.code] > 0) ? livePrices[stock.code] : stock.buyPrice;
+      });
+
+      // ── 3. 分組計算（Group By cat）
+      const groups = {};
+      virtualLedger.forEach(stock => {
+        const cat = stock.cat || '未分類';
+        if (!groups[cat]) {
+          groups[cat] = { totalCost: 0, totalValue: 0, winCount: 0, count: 0 };
+        }
+        const cost  = stock.buyPrice * (stock.shares || 1);
+        const value = stock._livePrice * (stock.shares || 1);
+        groups[cat].totalCost  += cost;
+        groups[cat].totalValue += value;
+        groups[cat].count      += 1;
+        if (stock._livePrice > stock.buyPrice) groups[cat].winCount += 1;
+      });
+
+      // 整理為陣列並計算衍生欄位
+      const results = Object.entries(groups).map(([cat, g]) => ({
+        cat,
+        label: CAT_LABELS[cat] || cat,
+        totalCost:  g.totalCost,
+        totalValue: g.totalValue,
+        totalPnl:   g.totalValue - g.totalCost,
+        pnlPct:     g.totalCost > 0 ? ((g.totalValue - g.totalCost) / g.totalCost * 100) : 0,
+        winRate:    g.count > 0 ? (g.winCount / g.count * 100) : 0,
+        count:      g.count,
+        winCount:   g.winCount,
+      }));
+
+      // ── 4. 渲染圖表 + 卡片
+      renderBacktestChart(results, startStr, endStr);
+      renderBacktestCards(results);
+
+      document.getElementById('backtestResult').style.display = 'block';
+      document.getElementById('backtestTitle').textContent =
+        `📅 回測區間：${startStr} ～ ${endStr}　｜　共 ${virtualLedger.length} 筆樣本，涵蓋 ${results.length} 個分類`;
+      showToast(`回測完成，共 ${virtualLedger.length} 筆資料`, 'ok');
+    }
+
+    function renderBacktestChart(results, startStr, endStr) {
+      const labels  = results.map(r => r.label);
+      const data    = results.map(r => parseFloat(r.pnlPct.toFixed(2)));
+      const colors  = data.map(v => v >= 0 ? 'rgba(26,158,92,0.75)' : 'rgba(217,64,64,0.75)');
+      const borders = data.map(v => v >= 0 ? '#1a9e5c' : '#d94040');
+
+      // 銷毀舊圖
+      if (appCharts['backtestBarChart']) {
+        appCharts['backtestBarChart'].destroy();
+        delete appCharts['backtestBarChart'];
+      }
+
+      const ctx = document.getElementById('backtestBarChart').getContext('2d');
+      appCharts['backtestBarChart'] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: '損益率 (%)',
+            data,
+            backgroundColor: colors,
+            borderColor: borders,
+            borderWidth: 1.5,
+            borderRadius: 6,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => ` ${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y.toFixed(2)}%`
+              }
+            }
+          },
+          scales: {
+            x: { ticks: { color: '#7a5a3e' }, grid: { color: 'rgba(180,100,40,0.08)' } },
+            y: {
+              ticks: {
+                color: '#7a5a3e',
+                callback: v => v + '%'
+              },
+              grid: { color: 'rgba(180,100,40,0.08)' }
+            }
+          }
+        }
+      });
+    }
+
+    function renderBacktestCards(results) {
+      const container = document.getElementById('backtestCards');
+      const fmt = n => n.toLocaleString('zh-TW', { maximumFractionDigits: 0 });
+
+      container.innerHTML = results.map(r => {
+        const pnlClass   = r.totalPnl >= 0 ? 'pos' : 'neg';
+        const pctSign    = r.pnlPct >= 0 ? '+' : '';
+        const catColor   = CAT_COLORS[r.cat] || '#b8926a';
+        return `
+          <div class="stat-card" style="border-top:3px solid ${catColor};">
+            <div class="label">${r.label}
+              <span style="font-size:10px;color:var(--text3);margin-left:4px;">${r.count} 筆</span>
+            </div>
+            <div class="value ${pnlClass}" style="font-size:18px;">
+              ${pctSign}${r.pnlPct.toFixed(2)}%
+            </div>
+            <div class="sub">總投入：${fmt(r.totalCost)} 元</div>
+            <div class="sub">總損益：<span class="${pnlClass}">${r.totalPnl >= 0 ? '+' : ''}${fmt(r.totalPnl)} 元</span></div>
+            <div class="sub">勝率：${r.winRate.toFixed(1)}%（${r.winCount}/${r.count}）</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ============================================================
+    // 現價 localStorage 快取
+    // ============================================================
+    const PRICE_CACHE_KEY = 'livePrices_cache';
+    const PRICE_CACHE_TS_KEY = 'livePrices_ts';
+
+    function savePricesToLocal() {
+      try {
+        localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(livePrices));
+        localStorage.setItem(PRICE_CACHE_TS_KEY, Date.now().toString());
+        updatePriceCacheBadge();
+      } catch(e) {
+        console.warn('現價快取寫入失敗', e);
+      }
+    }
+
+    function loadPricesFromLocal() {
+      try {
+        const raw = localStorage.getItem(PRICE_CACHE_KEY);
+        const ts  = localStorage.getItem(PRICE_CACHE_TS_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          Object.assign(livePrices, parsed);
+          livePriceTimestamp = ts ? Number(ts) : null;
+          updatePriceCacheBadge();
+          console.log('現價快取已載入，共', Object.keys(parsed).length, '筆');
+        }
+      } catch(e) {
+        console.warn('現價快取讀取失敗', e);
+      }
+    }
+
+    function updatePriceCacheBadge() {
+      const badge = document.getElementById('priceCacheBadge');
+      if (!badge) return;
+      const ts = localStorage.getItem(PRICE_CACHE_TS_KEY);
+      if (!ts) { badge.textContent = '現價 --'; badge.className = 'price-cache-badge'; return; }
+
+      const d = new Date(Number(ts));
+      const now = Date.now();
+      const diffHrs = (now - Number(ts)) / 1000 / 3600;
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      const hh = String(d.getHours()).padStart(2,'0');
+      const mi = String(d.getMinutes()).padStart(2,'0');
+      badge.textContent = `現價 ${mm}/${dd} ${hh}:${mi}`;
+      badge.className = 'price-cache-badge ' + (diffHrs < 8 ? 'fresh' : 'stale');
+    }
+
+    // ============================================================
+    // 全帳本批次更新現價
+    // ============================================================
+    async function fetchAllLedgerPrices() {
+      // 1. 收集所有帳本的不重複代號
+      const codeSet = new Set();
+      Object.values(ledger).forEach(stocks => {
+        stocks.forEach(s => { if(s.code) codeSet.add(s.code); });
+      });
+
+      if (codeSet.size === 0) {
+        showToast('帳本無任何股票代號', 'fail');
+        return;
+      }
+
+      const codes = [...codeSet];
+      
+      // 2. 呼叫系統現有的批次更新函數
+      // (此函數已包含畫面 Loading、分批查詢、失敗 Fallback 重試、以及畫面重繪)
+      await _runBatchOrProxy(codes, '全帳本');
+    }
     </script>
     </body>
     </html>
