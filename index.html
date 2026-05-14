@@ -177,12 +177,176 @@
     .price-cache-badge.fresh{border-color:var(--green);color:var(--green2);}
     .price-cache-badge.stale{border-color:var(--gold);color:var(--gold);}
 
+    /* ===== 手機響應式 ===== */
     @media(max-width:768px){
-      .charts-grid{grid-template-columns:1fr;}
-      .stock-picker{grid-template-columns:1fr;height:auto;}
-      .header{height:auto;padding:10px 12px;}
-      .main{padding:12px;}
-      .ledger-tabs{overflow-x:auto;}
+
+      /* --- Header --- */
+      .header{
+        height:auto;
+        padding:10px 12px;
+        gap:8px;
+        flex-wrap:wrap;
+      }
+      .logo{font-size:15px;}
+      .header-nav{
+        order:2;
+        width:100%;
+        display:flex;
+        justify-content:space-around;
+        gap:0;
+      }
+      .nav-btn{
+        flex:1;
+        text-align:center;
+        padding:7px 4px;
+        font-size:12px;
+      }
+      /* header 右側 badge 收起：日期、proxy badge、現價 badge 只保留現價 */
+      .date-badge:not(#priceCacheBadge){display:none;}
+      #proxyBadge{display:none;}
+      .gas-btn{
+        order:3;
+        margin-left:auto;
+        font-size:11px;
+        padding:5px 10px;
+      }
+      #priceCacheBadge{
+        order:3;
+        font-size:10px;
+        padding:3px 7px;
+      }
+
+      /* --- Main --- */
+      .main{padding:10px 10px 80px;}/* 底部留空，避免被瀏覽器底部欄擋住 */
+
+      /* --- Summary Cards --- */
+      .cards-row{
+        grid-template-columns:repeat(2,1fr);
+        gap:8px;
+      }
+      .stat-card{padding:12px;}
+      .stat-card .value{font-size:18px;}
+
+      /* --- Category Tabs --- */
+      .cat-tabs{
+        flex-wrap:nowrap;
+        overflow-x:auto;
+        padding-bottom:4px;
+        -webkit-overflow-scrolling:touch;
+        scrollbar-width:none;
+      }
+      .cat-tabs::-webkit-scrollbar{display:none;}
+      .cat-tab{flex-shrink:0;}
+
+      /* --- Toolbar --- */
+      .toolbar{
+        flex-wrap:wrap;
+        gap:6px;
+      }
+      .toolbar select,
+      .toolbar input[type=text]{
+        font-size:12px;
+        padding:6px 8px;
+      }
+      .toolbar input[type=text]{width:100%;order:10;/* 搜尋框移到最後一行 */}
+      .spacer{display:none;}/* 取消彈性空白，讓按鈕自然換行 */
+      .btn{font-size:12px;padding:6px 10px;}
+      .count-badge{font-size:11px;}
+
+      /* 帳本 toolbar 的按鈕太多，允許換行並縮短文字由 JS 控制，這裡只做 wrap */
+      #page-ledger .toolbar{gap:5px;}
+
+      /* --- Tables → 改為橫向捲動 --- */
+      .table-wrap{
+        overflow-x:auto;
+        -webkit-overflow-scrolling:touch;
+        max-height:none;/* 手機不限高度，讓頁面自然滾動 */
+      }
+      table{
+        font-size:12px;
+        min-width:620px;/* 讓表格可橫向捲動 */
+      }
+      thead th{
+        padding:7px 8px;
+        font-size:10px;
+      }
+      tbody td{padding:6px 8px;}
+
+      /* 績效表隱藏次要欄位（買入股數、預估損益保留，代號名稱分類保留） */
+      #perfTable th:nth-child(4),
+      #perfTable td:nth-child(4){display:none;}/* 貝氏評分 */
+
+      /* 帳本表隱藏投入金額、市值（手機螢幕不夠） */
+      #ledgerTable th:nth-child(7),
+      #ledgerTable td:nth-child(7),
+      #ledgerTable th:nth-child(9),
+      #ledgerTable td:nth-child(9){display:none;}
+
+      /* --- Ledger Tabs --- */
+      .ledger-tabs{
+        overflow-x:auto;
+        flex-wrap:nowrap;
+        -webkit-overflow-scrolling:touch;
+        scrollbar-width:none;
+      }
+      .ledger-tabs::-webkit-scrollbar{display:none;}
+      .ledger-tab-btn{flex-shrink:0;font-size:11px;padding:7px 12px;}
+
+      /* 帳本上方 selector 改全寬 */
+      #ledgerSelector{width:100%;}
+      #page-ledger>div:first-child{flex-direction:column;align-items:flex-start;}
+
+      /* --- Charts --- */
+      .charts-grid{grid-template-columns:1fr;gap:10px;}
+      .chart-card{padding:14px;}
+      .chart-wrap{height:200px;}
+
+      /* --- Period Tabs --- */
+      .period-tabs{flex-shrink:0;}
+      .period-tab{padding:4px 10px;font-size:11px;}
+
+      /* --- Modals --- */
+      .modal{
+        padding:16px;
+        max-height:90vh;
+        margin:0;
+        border-radius:var(--r2) var(--r2) 0 0;/* 從底部彈出感 */
+      }
+      .modal-bg{align-items:flex-end;padding:0;}
+      .stock-picker{grid-template-columns:1fr;height:auto;max-height:55vh;}
+      .picker-list{height:200px;}
+
+      /* --- Export Dropdown --- */
+      .export-menu{
+        right:auto;
+        left:0;
+        min-width:200px;
+      }
+
+      /* --- Settings --- */
+      .gas-panel{padding:14px;}
+      .gas-row{flex-wrap:wrap;}
+      .gas-input{width:100%;}
+      #gasCode{height:300px;font-size:10px;}
+
+      /* --- Loading Overlay --- */
+      .progress-bar-wrap{width:85vw;}
+
+      /* --- Toast --- */
+      .toast{
+        right:12px;
+        left:12px;
+        bottom:16px;
+        text-align:center;
+      }
+      .sync-queue{right:12px;bottom:60px;}
+    }
+
+    /* 超小螢幕（375px以下，例如 iPhone SE） */
+    @media(max-width:390px){
+      .cards-row{grid-template-columns:1fr;}/* 只剩單欄 */
+      .nav-btn{font-size:11px;padding:6px 2px;}
+      table{min-width:520px;}
     }
     </style>
     </head>
@@ -1348,7 +1512,7 @@ function sortLedgerBy(col) {
     }
 
     // 新增：用 CORS Proxy 批量查詢（一次送所有代號）
-    async function fetchBatchPricesViaProxy(codes) {
+    async function fetchBatchPricesViaProxy(codes, onBatch) {
       const CHUNK = 20; // corsproxy URL 長度限制，每批最多20檔
       const result = {};
 
@@ -1360,25 +1524,31 @@ function sortLedgerBy(col) {
         const proxyUrl = buildProxyUrl(targetUrl);
         if (!proxyUrl) return result;
 
+        const batchResult = {}; // 本批結果
         try {
           const res = await fetchWithTimeout(proxyUrl, 15000);
-          if (!res.ok) continue;
-          const d = JSON.parse(await res.text());
-          (d.msgArray || []).forEach(item => {
-            const code = item.c;
-            if (!code) return;
-            const price = (item.z && item.z !== '-' && item.z !== '')
-              ? parseFloat(item.z)
-              : (item.y && item.y !== '-' && item.y !== '')
-              ? parseFloat(item.y)
-              : 0;
-            if (price > 0) result[code] = price;
-          });
+          if (res.ok) {
+            const d = JSON.parse(await res.text());
+            (d.msgArray || []).forEach(item => {
+              const code = item.c;
+              if (!code) return;
+              const price = (item.z && item.z !== '-' && item.z !== '')
+                ? parseFloat(item.z)
+                : (item.y && item.y !== '-' && item.y !== '')
+                ? parseFloat(item.y)
+                : 0;
+              if (price > 0) { result[code] = price; batchResult[code] = price; }
+            });
+          }
         } catch(e) {
           console.warn(`Proxy 第${Math.floor(i/CHUNK)+1}批失敗:`, e.message);
         }
 
-        showProgress(Math.min(i + CHUNK, codes.length), codes.length);
+        // 每批完成，回報進度 + 本批成功資料
+        if (typeof onBatch === 'function') {
+          onBatch(Math.min(i + CHUNK, codes.length), codes.length, batchResult);
+        }
+
         if (i + CHUNK < codes.length) await new Promise(r => setTimeout(r, 2500));
       }
       return result;
@@ -1414,17 +1584,24 @@ function sortLedgerBy(col) {
         }
         showToast('GAS查詢失敗，改用Proxy...', 'fail');
       }
-      // === CORS Proxy 批量查詢 ===
+      // === CORS Proxy 批量查詢（即時顯示成功數）===
       showLoading(`透過 Proxy 分批查詢 ${codes.length} 檔...`);
       showProgress(0, codes.length);
-      const prices = await fetchBatchPricesViaProxy(codes);
+      
+      let updated = 0; // 提前宣告，讓 callback 可更新
+
+      const prices = await fetchBatchPricesViaProxy(codes, (done, total, batchPrices) => {
+        // 每批完成後立即更新 livePrices 並計算成功數
+        Object.entries(batchPrices).forEach(([c, p]) => {
+          if (p > 0) { livePrices[c] = p; updated++; }
+        });
+        showProgress(done, total);
+        document.getElementById('loadingText').textContent =
+          `Proxy查詢中... ${done}/${total} 檔｜✓ ${updated} 筆成功`;
+      });
+
       hideProgress();
       hideLoading();
-
-      let updated = 0;
-      codes.forEach(c => {
-        if (prices[c] > 0) { livePrices[c] = prices[c]; updated++; }
-      });
 
       // 僅補查真正失敗的（非交易時間y欄位也無值的）
       const failed = codes.filter(c => !prices[c]);
