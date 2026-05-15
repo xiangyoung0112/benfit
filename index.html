@@ -481,6 +481,8 @@
         <button class="btn ghost" onclick="fetchLivePricesForLedger()">🔄 更新現價</button>
         <button class="btn ghost" onclick="fetchAllLedgerPrices()">⚡ 全帳本更新現價</button>
         <button class="btn ghost" onclick="openManualPriceModal()">✏️ 手動編輯現價</button>
+        <button class="btn ghost" onclick="openHistPriceModal()">📅 指定日期現價</button>
+        <button class="btn ghost" onclick="recalcAllLedgerShares()">🔄 更新全帳本股數(5萬)</button>
         <button class="btn ghost" onclick="loadLedgerFromGAS()">☁️ 從GAS載入</button>
         <button class="btn ghost" onclick="openAddLedgerModal()">📅 新增帳本</button>
         <button class="btn ghost" onclick="openAddManual()">＋ 手動新增</button>
@@ -734,11 +736,31 @@
       </div>
     </div>
 
+    <!-- HIST PRICE MODAL -->
+    <div class="modal-bg" id="histPriceModal">
+      <div class="modal" style="max-width:420px;">
+        <h3>📅 全帳本更新指定日期收盤價</h3>
+        <p style="font-size:11px;color:var(--text3);margin-bottom:12px;">
+          查詢該日所有帳本股票的收盤價，模擬當日損益。<br>
+          ⚠️ 會暫時覆蓋現有現價，可點「更新現價」恢復即時行情。
+        </p>
+        <div class="form-group">
+          <label class="form-label">指定日期</label>
+          <input class="form-input" id="histPriceDate" type="date">
+        </div>
+        <div id="histPriceStatus" style="margin-top:8px;font-size:12px;color:var(--text3);"></div>
+        <div class="modal-actions">
+          <button class="btn ghost" onclick="document.getElementById('histPriceModal').classList.remove('open')">取消</button>
+          <button class="btn green" onclick="fetchHistPrices()">查詢並套用</button>
+        </div>
+      </div>
+    </div>
+
     <script>
     // ============================================================
     // EMBEDDED STOCK DATA
     // ============================================================
-    const STOCKS_RAW = [{"代號":"9958","名稱":"世紀鋼","貝氏評分":4.53,"分類":"long_term","現價":103.5,"漲幅":"+0.5"},{"代號":"9945","名稱":"潤泰新","貝氏評分":4.53,"分類":"long_term","現價":23.6,"漲幅":"+0.9"},{"代號":"3443","名稱":"創意","貝氏評分":4.53,"分類":"dark_horse","現價":5730.0,"漲幅":"+10.0"},{"代號":"3661","名稱":"世芯-KY","貝氏評分":4.53,"分類":"dark_horse","現價":5375.0,"漲幅":"+9.9"},{"代號":"2454","名稱":"聯發科","貝氏評分":4.53,"分類":"dark_horse","現價":3880.0,"漲幅":"+6.9"},{"代號":"2383","名稱":"台光電","貝氏評分":4.53,"分類":"long_term","現價":4850.0,"漲幅":"+2.1"},{"代號":"3529","名稱":"力旺","貝氏評分":4.53,"分類":"long_term","現價":4460.0,"漲幅":"+2.9"},{"代號":"3324","名稱":"雙鴻","貝氏評分":4.53,"分類":"long_term","現價":1070.0,"漲幅":"+0.5"},{"代號":"7750","名稱":"新代","貝氏評分":4.53,"分類":"dark_horse","現價":2795.0,"漲幅":"+9.8"},{"代號":"3081","名稱":"聯亞","貝氏評分":4.53,"分類":"dark_horse","現價":2780.0,"漲幅":"+6.1"},{"代號":"2330","名稱":"台積電","貝氏評分":4.53,"分類":"long_term","現價":2235.0,"漲幅":"-2.4"},{"代號":"2308","名稱":"台達電","貝氏評分":4.53,"分類":"dark_horse","現價":2245.0,"漲幅":"+2.0"},{"代號":"8210","名稱":"勤誠","貝氏評分":4.53,"分類":"dark_horse","現價":1555.0,"漲幅":"+9.9"},{"代號":"6274","名稱":"台燿","貝氏評分":4.53,"分類":"dark_horse","現價":1455.0,"漲幅":"+6.2"},{"代號":"5289","名稱":"宜鼎","貝氏評分":4.53,"分類":"dark_horse","現價":1760.0,"漲幅":"+10.0"},{"代號":"5269","名稱":"祥碩","貝氏評分":4.53,"分類":"pullback","現價":1390.0,"漲幅":"-1.4"},{"代號":"6944","名稱":"兆聯實業","貝氏評分":4.53,"分類":"long_term","現價":923.0,"漲幅":"-4.3"},{"代號":"8299","名稱":"群聯","貝氏評分":4.53,"分類":"dark_horse","現價":2670.0,"漲幅":"+9.9"},{"代號":"6830","名稱":"汎銓","貝氏評分":4.53,"分類":"long_term","現價":754.0,"漲幅":"-4.2"},{"代號":"6526","名稱":"達發","貝氏評分":4.53,"分類":"dark_horse","現價":750.0,"漲幅":"-0.4"},{"代號":"6409","名稱":"旭隼","貝氏評分":4.53,"分類":"long_term","現價":764.0,"漲幅":"-6.9"},{"代號":"6446","名稱":"藥華藥","貝氏評分":4.53,"分類":"pullback","現價":706.0,"漲幅":"-2.5"},{"代號":"3293","名稱":"鈊象","貝氏評分":4.53,"分類":"long_term","現價":731.0,"漲幅":"-0.5"},{"代號":"6691","名稱":"洋基工程","貝氏評分":4.53,"分類":"long_term","現價":643.0,"漲幅":"-1.7"},{"代號":"6584","名稱":"南俊國際","貝氏評分":4.53,"分類":"dark_horse","現價":687.0,"漲幅":"+2.7"},{"代號":"4991","名稱":"環宇-KY","貝氏評分":4.53,"分類":"dark_horse","現價":686.0,"漲幅":"+6.5"},{"代號":"4979","名稱":"華星光","貝氏評分":4.53,"分類":"long_term","現價":672.0,"漲幅":"+1.8"},{"代號":"7717","名稱":"萊德光電-KY","貝氏評分":4.53,"分類":"long_term","現價":676.0,"漲幅":"+1.2"},{"代號":"6683","名稱":"雍智科技","貝氏評分":4.53,"分類":"long_term","現價":2270.0,"漲幅":"+2.7"},{"代號":"6442","名稱":"光聖","貝氏評分":4.53,"分類":"long_term","現價":1950.0,"漲幅":"-0.8"},{"代號":"6805","名稱":"富世達","貝氏評分":4.53,"分類":"dark_horse","現價":1995.0,"漲幅":"+0.8"},{"代號":"6223","名稱":"旺矽","貝氏評分":4.53,"分類":"long_term","現價":4985.0,"漲幅":"-0.8"},{"代號":"3363","名稱":"上詮","貝氏評分":4.53,"分類":"explosive","現價":853.0,"漲幅":"+5.3"},{"代號":"3563","名稱":"牧德","貝氏評分":4.53,"分類":"long_term","現價":807.0,"漲幅":"+0.6"},{"代號":"6488","名稱":"環球晶","貝氏評分":4.53,"分類":"dark_horse","現價":835.0,"漲幅":"+4.1"},{"代號":"2382","名稱":"廣達","貝氏評分":4.53,"分類":"dark_horse","現價":343.5,"漲幅":"+0.9"},{"代號":"2317","名稱":"鴻海","貝氏評分":4.53,"分類":"dark_horse","現價":252.0,"漲幅":"+0.8"},{"代號":"2303","名稱":"聯電","貝氏評分":4.53,"分類":"dark_horse","現價":95.0,"漲幅":"+4.1"},{"代號":"2886","名稱":"兆豐金","貝氏評分":4.53,"分類":"long_term","現價":40.1,"漲幅":"-0.2"},{"代號":"2882","名稱":"國泰金","貝氏評分":4.53,"分類":"long_term","現價":78.4,"漲幅":"-2.0"},{"代號":"2881","名稱":"富邦金","貝氏評分":4.53,"分類":"long_term","現價":95.5,"漲幅":"-1.2"},{"代號":"2615","名稱":"萬海","貝氏評分":4.53,"分類":"long_term","現價":78.5,"漲幅":"+2.6"},{"代號":"2603","名稱":"長榮","貝氏評分":4.53,"分類":"long_term","現價":214.0,"漲幅":"+1.2"},{"代號":"2609","名稱":"陽明","貝氏評分":4.53,"分類":"long_term","現價":50.8,"漲幅":"+1.8"},{"代號":"9939","名稱":"宏全","貝氏評分":4.53,"分類":"explosive","現價":120.0,"漲幅":"+7.6"},{"代號":"8213","名稱":"志超","貝氏評分":4.53,"分類":"explosive","現價":41.8,"漲幅":"+10.0"},{"代號":"8114","名稱":"振樺電","貝氏評分":4.53,"分類":"explosive","現價":218.0,"漲幅":"+9.8"},{"代號":"6415","名稱":"矽力*-KY","貝氏評分":4.53,"分類":"explosive","現價":468.0,"漲幅":"+10.0"},{"代號":"6282","名稱":"康舒","貝氏評分":4.53,"分類":"explosive","現價":55.4,"漲幅":"+9.9"},{"代號":"5285","名稱":"界霖","貝氏評分":4.53,"分類":"explosive","現價":67.8,"漲幅":"+9.9"},{"代號":"2344","名稱":"華邦電","貝氏評分":4.53,"分類":"dark_horse","現價":117.5,"漲幅":"+9.8"},{"代號":"2408","名稱":"南亞科","貝氏評分":4.53,"分類":"dark_horse","現價":301.0,"漲幅":"+9.9"},{"代號":"2301","名稱":"光寶科","貝氏評分":4.53,"分類":"dark_horse","現價":224.0,"漲幅":"+9.8"},{"代號":"3006","名稱":"晶豪科","貝氏評分":4.53,"分類":"dark_horse","現價":222.0,"漲幅":"+9.9"},{"代號":"3481","名稱":"群創","貝氏評分":4.53,"分類":"dark_horse","現價":32.3,"漲幅":"+9.9"},{"代號":"3016","名稱":"嘉晶","貝氏評分":4.53,"分類":"dark_horse,pullback","現價":128.5,"漲幅":"+9.8"},{"代號":"3135","名稱":"凌航","貝氏評分":4.53,"分類":"dark_horse","現價":194.5,"漲幅":"+9.9"},{"代號":"6285","名稱":"啟碁","貝氏評分":4.53,"分類":"dark_horse","現價":259.0,"漲幅":"+4.6"},{"代號":"2455","名稱":"全新","貝氏評分":4.53,"分類":"dark_horse","現價":360.0,"漲幅":"+6.8"},{"代號":"2360","名稱":"致茂","貝氏評分":4.53,"分類":"dark_horse","現價":2360.0,"漲幅":"+5.8"},{"代號":"1597","名稱":"直得","貝氏評分":4.53,"分類":"dark_horse","現價":182.0,"漲幅":"+5.2"},{"代號":"3711","名稱":"日月光投控","貝氏評分":4.53,"分類":"dark_horse","現價":537.0,"漲幅":"+4.1"},{"代號":"3532","名稱":"台勝科","貝氏評分":4.53,"分類":"dark_horse","現價":268.0,"漲幅":"+4.1"},{"代號":"2337","名稱":"旺宏","貝氏評分":4.53,"分類":"dark_horse","現價":159.5,"漲幅":"+4.2"},{"代號":"6451","名稱":"訊芯-KY","貝氏評分":4.53,"分類":"dark_horse","現價":455.5,"漲幅":"+3.3"},{"代號":"1303","名稱":"南亞","貝氏評分":4.53,"分類":"dark_horse","現價":91.5,"漲幅":"+3.3"},{"代號":"3701","名稱":"大眾控","貝氏評分":4.53,"分類":"dark_horse","現價":62.9,"漲幅":"+3.3"},{"代號":"8028","名稱":"昇陽半導體","貝氏評分":4.53,"分類":"dark_horse","現價":234.0,"漲幅":"+3.5"},{"代號":"6861","名稱":"睿生光電","貝氏評分":4.53,"分類":"dark_horse","現價":389.0,"漲幅":"+3.5"},{"代號":"4585","名稱":"達明","貝氏評分":4.53,"分類":"dark_horse","現價":342.0,"漲幅":"+3.8"},{"代號":"4571","名稱":"鈞興-KY","貝氏評分":4.53,"分類":"dark_horse","現價":197.5,"漲幅":"+3.9"},{"代號":"6197","名稱":"佳必琪","貝氏評分":4.53,"分類":"dark_horse","現價":229.0,"漲幅":"+4.8"},{"代號":"2465","名稱":"麗臺","貝氏評分":4.53,"分類":"dark_horse","現價":86.9,"漲幅":"+8.0"}];
+    const STOCKS_RAW = [];
 
     const CAT_LABELS = {
       'long_term':'長線','intraday_dip':'當沖回補','reversal':'反轉',
@@ -804,7 +826,6 @@ let ledgerSortDir = -1;
       if(gasUrl) document.getElementById('gasUrl').value = gasUrl;
       loadProxySettings();
 
-      STOCKS_RAW.forEach(s => { livePrices[s['代號']] = s['現價']; });
       buildCatTabs();
       buildCatFilters();
       ensureTodayLedger();
@@ -924,7 +945,7 @@ let ledgerSortDir = -1;
 
     function calcShares(price) {
       if(!price || price <= 0) return 0;
-      return Math.max(1, Math.floor(1000 / price));
+      return Math.max(1, Math.floor(50000 / price));
     }
 
     function sortBy(col) {
@@ -995,7 +1016,7 @@ let ledgerSortDir = -1;
         <div class="stat-card"><div class="label">篩選檔數</div><div class="value neu">${data.length}</div></div>
         <div class="stat-card"><div class="label">上漲</div><div class="value pos">${posCount}</div></div>
         <div class="stat-card"><div class="label">下跌</div><div class="value neg">${negCount}</div></div>
-        <div class="stat-card"><div class="label">預估總損益</div><div class="value ${pnlCls}">${pnlStr}</div><div class="sub">NTD (各1000元)</div></div>
+        <div class="stat-card"><div class="label">預估總損益</div><div class="value ${pnlCls}">${pnlStr}</div><div class="sub">NTD (各5萬元)</div></div>
         <div class="stat-card"><div class="label">平均貝氏評分</div><div class="value" style="color:var(--gold)">${avgScore}</div></div>
       `;
     }
@@ -1008,7 +1029,7 @@ let ledgerSortDir = -1;
       const targetDate = document.getElementById('saveLedgerSelect').value;
       const today = new Date().toISOString().split('T')[0];
       const shares = calcShares(price);
-      if(shares===0) { showToast('價格過高，1000元買不到1股','fail'); return; }
+      if(shares===0) { showToast('價格過高，5萬元買不到1股','fail'); return; }
       if(!ledger[targetDate]) ledger[targetDate] = [];
       if(ledger[targetDate].find(r => r.code===code && r.date===today)) { showToast(name+' 今日已在帳本中','fail'); return; }
       ledger[targetDate].push({ date:today, code, name, cat, buyPrice:price, shares, score });
@@ -1049,6 +1070,21 @@ let ledgerSortDir = -1;
       renderLedgerTabs();
       showToast(`✓ 已匯入 ${added} 檔到 ${formatDateLabel(targetDate)}（跳過 ${skipped}）`, 'ok');
       if(gasUrl) enqueuSync(()=>pushLedgerToGAS(), `同步 ${targetDate} 帳本...`);
+    }
+
+    function recalcAllLedgerShares() {
+      if(!confirm('將以現在的 calcShares（5萬元）重新計算所有帳本的股數，確定？')) return;
+      let total = 0;
+      Object.values(ledger).forEach(stocks => {
+        stocks.forEach(r => {
+          const newShares = calcShares(r.buyPrice);
+          r.shares = newShares;
+          total++;
+        });
+      });
+      renderLedger();
+      renderLedgerTabs();
+      showToast(`已重算 ${total} 筆帳本股數（需點「☁️ 同步GAS」以保存）`, 'ok');
     }
 
     // 保留舊名稱相容
@@ -1575,6 +1611,7 @@ function sortLedgerBy(col) {
           codes.forEach(c => { if(prices[c] > 0) { livePrices[c] = prices[c]; updated++; } });
           livePriceTimestamp = Date.now();
         savePricesToLocal();
+          if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
           const msg = updated === codes.length
             ? `✓ 全部 ${updated} 檔成功`
             : updated > 0 ? `⚠️ 部分成功 ${updated}/${codes.length}`
@@ -1621,6 +1658,7 @@ function sortLedgerBy(col) {
 
       livePriceTimestamp = Date.now();
       savePricesToLocal();
+      if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
       const msg = updated === codes.length ? `✓ 全部 ${updated} 檔成功`
         : updated > 0 ? `⚠️ 部分成功 ${updated}/${codes.length}`
         : '✗ 全部失敗，請確認 Proxy 設定';
@@ -2216,6 +2254,17 @@ function sortLedgerBy(col) {
       }
     }
 
+    async function pushPricesToGAS(prices) {
+      if(!gasUrl) return;
+      const now = new Date().toISOString().split('T')[0];
+      const r = await fetch(gasUrl, {
+        method: 'POST', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+        body: JSON.stringify({ action: 'savePriceCache', date: now, prices })
+      });
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      return await r.json();
+    }
+
     async function saveTodayPricesToGAS(stocks, date) {
       if(!gasUrl) return;
       const priceData = stocks.map(s=>({date,code:s['代號'],name:s['名稱'],cat:s['分類'],price:livePrices[s['代號']]||s['現價'],score:s['貝氏評分']}));
@@ -2360,6 +2409,11 @@ function sortLedgerBy(col) {
         const codes = (e.parameter.codes || '').split(',').filter(Boolean);
         return json({prices: getBatchPrices(codes)});
       }
+      if (a === 'getHistoricalPrices') {
+        const codes = (e.parameter.codes || '').split(',').filter(Boolean);
+        const dateStr = e.parameter.date || '';
+        return json({prices: getHistoricalPrices(codes, dateStr)});
+      }
       if (a === 'updateAllPrices') {
         updateAllPrices();
         return json({status:'ok'});
@@ -2371,7 +2425,9 @@ function sortLedgerBy(col) {
       try {
         const b = JSON.parse(e.postData.contents);
         if (b.action === 'saveLedger') return json({status:'ok', count: writeLedgerSheet(b.date, b.data)});
+        if (b.action === 'savePriceCache') return json({status:'ok', count: writePriceCacheSheet(b.date, b.prices)});
         if (b.action === 'getBatchPrices') return json({prices: getBatchPrices(b.codes || [])});
+        if (b.action === 'getHistoricalPrices') return json({prices: getHistoricalPrices(b.codes || [], b.date || '')});
         return json({error:'unknown action'});
       } catch(err) {
         return json({error: err.message});
@@ -2467,6 +2523,53 @@ function sortLedgerBy(col) {
       return result;
     }
 
+    // ─── 歷史現價查詢（上市+上櫃，不依賴工作表） ────────────────
+    function getHistoricalPrices(codes, dateStr) {
+      const result = {};
+      if (!dateStr || codes.length === 0) return result;
+
+      const apiDate = dateStr.replace(/-/g, ''); // YYYYMMDD for TWSE
+      const codeSet = new Set(codes);
+
+      // ── 1. TPEx 上櫃：一次查當日全部，再過濾 ──
+      try {
+        const url = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes?date=' + dateStr;
+        const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+        if (res.getResponseCode() === 200) {
+          const data = JSON.parse(res.getContentText());
+          data.forEach(item => {
+            const code  = (item.SecuritiesCompanyCode || '').trim();
+            const price = parseFloat(item.Close);
+            if (codeSet.has(code) && price > 0) result[code] = price;
+          });
+        }
+      } catch(e) { Logger.log('[TPEx hist] ' + e.message); }
+
+      // ── 2. TWSE 上市：TPEx 沒找到的才查 ──
+      const stillNeeded = codes.filter(c => !result[c]);
+      const targetDay = String(parseInt(dateStr.substring(0,4)) - 1911)
+                        + '/' + dateStr.substring(5,7)
+                        + '/' + dateStr.substring(8,10);
+
+      stillNeeded.forEach(code => {
+        Utilities.sleep(300);
+        try {
+          const url = 'https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=' + apiDate + '&stockNo=' + code;
+          const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+          if (res.getResponseCode() !== 200) return;
+          const json = JSON.parse(res.getContentText());
+          if (json.stat !== 'OK' || !json.data) return;
+          const row = json.data.find(r => r[0].trim() === targetDay);
+          if (row) {
+            const price = parseFloat(row[6].replace(/,/g, ''));
+            if (price > 0) result[code] = price;
+          }
+        } catch(e) { Logger.log('[TWSE hist] ' + code + ': ' + e.message); }
+      });
+
+      return result;
+    }
+
     // ─── 更新全台股現價工作表（可設觸發器每日收盤後執行）──────
     function updateAllPrices() {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -2553,6 +2656,20 @@ function sortLedgerBy(col) {
         });
       });
       return result;
+    }
+
+    function writePriceCacheSheet(date, prices) {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      let s = ss.getSheetByName(PRICE_SHEET);
+      if (!s) s = ss.insertSheet(PRICE_SHEET);
+
+      const now = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
+      s.clearContents();
+      s.appendRow(['代號', '現價', '更新時間']);
+      s.getRange(1,1,1,3).setFontWeight('bold').setBackground('#f5e6d3');
+      const rows = Object.entries(prices).map(([code, price]) => [code, price, now]);
+      if (rows.length > 0) s.getRange(2, 1, rows.length, 3).setValues(rows);
+      return rows.length;
     }
 
     function fmtDate(v) {
@@ -2818,6 +2935,67 @@ function sortLedgerBy(col) {
       // 2. 呼叫系統現有的批次更新函數
       // (此函數已包含畫面 Loading、分批查詢、失敗 Fallback 重試、以及畫面重繪)
       await _runBatchOrProxy(codes, '全帳本');
+    }
+
+    function openHistPriceModal() {
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      document.getElementById('histPriceDate').value = yesterday;
+      document.getElementById('histPriceStatus').textContent = '';
+      document.getElementById('histPriceModal').classList.add('open');
+    }
+
+    async function fetchHistPrices() {
+      const dateStr = document.getElementById('histPriceDate').value;
+      if(!dateStr) { showToast('請選擇日期','fail'); return; }
+      if(!gasUrl) { showToast('請先設定GAS URL','fail'); return; }
+
+      const codeSet = new Set();
+      Object.values(ledger).forEach(stocks => stocks.forEach(s => { if(s.code) codeSet.add(s.code); }));
+      if(codeSet.size === 0) { showToast('帳本無任何股票','fail'); return; }
+
+      const statusEl = document.getElementById('histPriceStatus');
+      statusEl.textContent = `查詢 ${codeSet.size} 檔中，請稍候（約 ${Math.ceil(codeSet.size * 0.3 / 10)} 秒）...`;
+      statusEl.style.color = 'var(--text2)';
+
+      showLoading(`查詢 ${dateStr} 收盤價中...`);
+      try {
+        const codes = [...codeSet];
+        const params = new URLSearchParams({
+          action: 'getHistoricalPrices',
+          date: dateStr,
+          codes: codes.join(',')
+        });
+        const r = await fetch(`${gasUrl}?${params}`, {
+          method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+          headers: {'Accept': 'application/json'}
+        });
+        if(!r.ok) throw new Error(`HTTP ${r.status}`);
+        const d = await r.json();
+        if(d.error) throw new Error(d.error);
+
+        const prices = d.prices || {};
+        let updated = 0;
+        Object.entries(prices).forEach(([code, price]) => {
+          if(price > 0) { livePrices[code] = price; updated++; }
+        });
+
+        if(updated === 0) {
+          statusEl.textContent = '⚠️ 查無資料，請確認日期是否為交易日。';
+          statusEl.style.color = 'var(--red)';
+          hideLoading();
+          return;
+        }
+
+        livePriceTimestamp = Date.now();
+        renderPerf(); renderLedger();
+        hideLoading();
+        document.getElementById('histPriceModal').classList.remove('open');
+        showToast(`✓ 已套用 ${dateStr} 共 ${updated}/${codes.length} 檔收盤價`, 'ok');
+      } catch(e) {
+        hideLoading();
+        statusEl.textContent = '❌ 查詢失敗: ' + e.message;
+        statusEl.style.color = 'var(--red)';
+      }
     }
     </script>
     </body>
