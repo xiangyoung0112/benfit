@@ -1547,20 +1547,20 @@ function sortLedgerBy(col) {
       return null;
     }
 
-    // 新增：用 CORS Proxy 批量查詢（一次送所有代號）
+    // 新版：先查上市(tse)，無現價再補查上櫃(otc)，不 fallback 到昨收
     async function fetchBatchPricesViaProxy(codes, onBatch) {
-      const CHUNK = 20; // corsproxy URL 長度限制，每批最多20檔
+      const CHUNK = 15; // 縮小批次避免 URL 過長
       const result = {};
 
+      // 第一輪：用 tse_ 查（上市）
       for (let i = 0; i < codes.length; i += CHUNK) {
         const chunk = codes.slice(i, i + CHUNK);
-        const ex_ch = chunk.map(c => `tse_${c}.tw|`).join('') +
-                      chunk.map(c => `otc_${c}.tw|`).join('');
+        const ex_ch = chunk.map(c => `tse_${c}.tw`).join('|') + '|';
         const targetUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=${ex_ch}`;
         const proxyUrl = buildProxyUrl(targetUrl);
         if (!proxyUrl) return result;
 
-        const batchResult = {}; // 本批結果
+        const batchResult = {};
         try {
           const res = await fetchWithTimeout(proxyUrl, 15000);
           if (res.ok) {
@@ -1568,31 +1568,66 @@ function sortLedgerBy(col) {
             (d.msgArray || []).forEach(item => {
               const code = item.c;
               if (!code) return;
-              const price = (item.z && item.z !== '-' && item.z !== '')
-                ? parseFloat(item.z)
-                : (item.y && item.y !== '-' && item.y !== '')
-                ? parseFloat(item.y)
-                : 0;
-              if (price > 0) { result[code] = price; batchResult[code] = price; }
+              // 只用 item.z（即時成交價），不 fallback 到 item.y（昨收）
+              if (item.z && item.z !== '-' && item.z !== '') {
+                const price = parseFloat(item.z);
+                if (price > 0) { result[code] = price; batchResult[code] = price; }
+              }
             });
           }
         } catch(e) {
-          console.warn(`Proxy 第${Math.floor(i/CHUNK)+1}批失敗:`, e.message);
+          console.warn(`TSE Proxy 第${Math.floor(i/CHUNK)+1}批失敗:`, e.message);
         }
 
-        // 每批完成，回報進度 + 本批成功資料
         if (typeof onBatch === 'function') {
-          onBatch(Math.min(i + CHUNK, codes.length), codes.length, batchResult);
+          onBatch(Math.min(i + CHUNK, codes.length), codes.length * 2, batchResult);
         }
-
-        if (i + CHUNK < codes.length) await new Promise(r => setTimeout(r, 2500));
+        if (i + CHUNK < codes.length) await new Promise(r => setTimeout(r, 2000));
       }
+
+      // 第二輪：TSE 查不到的，改用 otc_ 查（上櫃）
+      const notFound = codes.filter(c => !result[c]);
+      if (notFound.length > 0) {
+        console.log(`[OTC補查] ${notFound.length} 檔`);
+        for (let i = 0; i < notFound.length; i += CHUNK) {
+          const chunk = notFound.slice(i, i + CHUNK);
+          const ex_ch = chunk.map(c => `otc_${c}.tw`).join('|') + '|';
+          const targetUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=${ex_ch}`;
+          const proxyUrl = buildProxyUrl(targetUrl);
+          if (!proxyUrl) break;
+
+          const batchResult = {};
+          try {
+            const res = await fetchWithTimeout(proxyUrl, 15000);
+            if (res.ok) {
+              const d = JSON.parse(await res.text());
+              (d.msgArray || []).forEach(item => {
+                const code = item.c;
+                if (!code) return;
+                if (item.z && item.z !== '-' && item.z !== '') {
+                  const price = parseFloat(item.z);
+                  if (price > 0) { result[code] = price; batchResult[code] = price; }
+                }
+              });
+            }
+          } catch(e) {
+            console.warn(`OTC Proxy 第${Math.floor(i/CHUNK)+1}批失敗:`, e.message);
+          }
+
+          if (typeof onBatch === 'function') {
+            onBatch(codes.length + Math.min(i + CHUNK, notFound.length), codes.length * 2, batchResult);
+          }
+          if (i + CHUNK < notFound.length) await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+
       return result;
     }
 
     async function _runBatchOrProxy(codes, label) {
       const mode = document.getElementById('proxyMode')?.value || proxyMode;
-      // === GAS 批量優先 ===
+
+      // === GAS 批量優先（不動） ===
       if(mode === 'gas' && gasUrl) {
         showLoading(`透過 GAS 查詢 ${codes.length} 檔...`);
         showProgress(0, codes.length);
@@ -1610,58 +1645,49 @@ function sortLedgerBy(col) {
           let updated = 0;
           codes.forEach(c => { if(prices[c] > 0) { livePrices[c] = prices[c]; updated++; } });
           livePriceTimestamp = Date.now();
-        savePricesToLocal();
+          savePricesToLocal();
           if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
           const msg = updated === codes.length
             ? `✓ 全部 ${updated} 檔成功`
-            : updated > 0 ? `⚠️ 部分成功 ${updated}/${codes.length}`
-            : '✗ GAS查詢失敗';
+            : updated > 0 ? `⚠️ 部分成功 ${updated}/${codes.length}（非交易時間則屬正常）`
+            : '⚠️ GAS查詢完成，目前無即時成交價（非交易時間）';
           showToast(msg, updated > 0 ? 'ok' : 'fail');
           renderPerf(); renderLedger(); return;
         }
         showToast('GAS查詢失敗，改用Proxy...', 'fail');
       }
-      // === CORS Proxy 批量查詢（即時顯示成功數）===
-      showLoading(`透過 Proxy 分批查詢 ${codes.length} 檔...`);
-      showProgress(0, codes.length);
-      
-      let updated = 0; // 提前宣告，讓 callback 可更新
+
+      // === CORS Proxy 雙輪查詢（TSE → OTC）===
+      showLoading(`透過 Proxy 分批查詢 ${codes.length} 檔（TSE → OTC 兩輪）...`);
+      showProgress(0, codes.length * 2); // 雙輪，進度條分兩段
+
+      let updated = 0;
 
       const prices = await fetchBatchPricesViaProxy(codes, (done, total, batchPrices) => {
-        // 每批完成後立即更新 livePrices 並計算成功數
         Object.entries(batchPrices).forEach(([c, p]) => {
           if (p > 0) { livePrices[c] = p; updated++; }
         });
         showProgress(done, total);
         document.getElementById('loadingText').textContent =
-          `Proxy查詢中... ${done}/${total} 檔｜✓ ${updated} 筆成功`;
+          `Proxy查詢中（TSE→OTC）... ｜✓ ${updated} 筆有即時成交價`;
       });
 
       hideProgress();
       hideLoading();
 
-      // 僅補查真正失敗的（非交易時間y欄位也無值的）
-      const failed = codes.filter(c => !prices[c]);
-      if (failed.length > 0 && failed.length <= codes.length * 0.3) {
-        // 僅在失敗率低於30%時才補查，避免無謂重試
-        showLoading(`補查 ${failed.length} 檔...`);
-        for (let i = 0; i < failed.length; i += 2) {
-          const batch = failed.slice(i, i + 2);
-          await Promise.allSettled(batch.map(async code => {
-            const p = await fetchOneLivePriceProxy(code);
-            if (p) { livePrices[code] = p; updated++; }
-          }));
-          if (i + 2 < failed.length) await new Promise(r => setTimeout(r, 2500));
-        }
-        hideLoading();
-      }
-
       livePriceTimestamp = Date.now();
       savePricesToLocal();
       if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
-      const msg = updated === codes.length ? `✓ 全部 ${updated} 檔成功`
-        : updated > 0 ? `⚠️ 部分成功 ${updated}/${codes.length}`
-        : '✗ 全部失敗，請確認 Proxy 設定';
+
+      const noPrice = codes.filter(c => !prices[c]).length;
+      let msg;
+      if (updated === codes.length) {
+        msg = `✓ 全部 ${updated} 檔取得即時成交價`;
+      } else if (updated > 0) {
+        msg = `✓ ${updated}/${codes.length} 檔有即時成交價，${noPrice} 檔無成交（可能尚未開盤或停牌）`;
+      } else {
+        msg = '⚠️ 全部無即時成交價，請確認是否為交易時段或 Proxy 設定';
+      }
       showToast(msg, updated > 0 ? 'ok' : 'fail');
       renderPerf(); renderLedger();
     }
@@ -2443,7 +2469,7 @@ function sortLedgerBy(col) {
     function fetchAllMarketPrices() {
       const result = {};
 
-      // 1. 先抓 TPEx 上櫃（通常較早更新）
+      // 1. TPEx 上櫃
       try {
         const res = UrlFetchApp.fetch(
           'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes',
@@ -2451,22 +2477,19 @@ function sortLedgerBy(col) {
         );
         if (res.getResponseCode() === 200) {
           const data = JSON.parse(res.getContentText());
-          // 只用今天的資料
-          const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyyMMdd');
-          const rocToday = (parseInt(today.substring(0,4)) - 1911) + today.substring(4);
+          // API 只回傳最新交易日，不需要額外比對日期
           data.forEach(item => {
-            if(item.Date !== rocToday) return; // 跳過非今日資料
             const code  = (item.SecuritiesCompanyCode || '').trim();
             const price = parseFloat(item.Close);
             if (code && price > 0) result[code] = price;
           });
-          Logger.log('[TPEx] 今日(' + rocToday + ') 載入: ' + Object.keys(result).length + ' 筆');
+          Logger.log('[TPEx] 載入: ' + Object.keys(result).length + ' 筆');
         }
       } catch(e) {
         Logger.log('[TPEx] 錯誤: ' + e.message);
       }
 
-      // 2. 再抓 TWSE 上市（補查 TPEx 沒有的）
+      // 2. TWSE 上市（補查或覆蓋 TPEx 沒有的）
       try {
         const res = UrlFetchApp.fetch(
           'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL',
@@ -2474,21 +2497,13 @@ function sortLedgerBy(col) {
         );
         if (res.getResponseCode() === 200) {
           const data = JSON.parse(res.getContentText());
-          const dataDate = data[0]?.Date || '';
-          const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyyMMdd');
-          const rocToday = (parseInt(today.substring(0,4)) - 1911) + today.substring(4);
-          
-          if(dataDate === rocToday) {
-            // 今日資料才用
-            data.forEach(item => {
-              const code  = (item.Code || '').trim();
-              const price = parseFloat((item.ClosingPrice || '').replace(/,/g, ''));
-              if (code && price > 0) result[code] = price;
-            });
-            Logger.log('[TWSE] 今日資料載入完成');
-          } else {
-            Logger.log('[TWSE] 資料日期(' + dataDate + ')非今日(' + rocToday + ')，略過');
-          }
+          // 同樣不做嚴格日期篩選，API 已自動回傳最新交易日
+          data.forEach(item => {
+            const code  = (item.Code || '').trim();
+            const price = parseFloat((item.ClosingPrice || '').replace(/,/g, ''));
+            if (code && price > 0) result[code] = price;
+          });
+          Logger.log('[TWSE] 載入後總計: ' + Object.keys(result).length + ' 筆');
         }
       } catch(e) {
         Logger.log('[TWSE] 錯誤: ' + e.message);
