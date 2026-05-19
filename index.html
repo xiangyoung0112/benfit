@@ -756,6 +756,56 @@
       </div>
     </div>
 
+    <!-- SCAN RESULT MODAL -->
+    <div class="modal-bg" id="scanResultModal">
+      <div class="modal" style="max-width:520px;">
+        <h3>📡 掃描結果</h3>
+        <div style="display:flex;gap:16px;margin:16px 0;">
+          <div class="stat-card" style="flex:1;text-align:center;">
+            <div class="label">✅ 成功</div>
+            <div class="value pos" id="scanResultSuccess">0</div>
+            <div class="sub">筆</div>
+          </div>
+          <div class="stat-card" style="flex:1;text-align:center;">
+            <div class="label">❌ 失敗</div>
+            <div class="value neg" id="scanResultFail">0</div>
+            <div class="sub">筆（無即時成交價）</div>
+          </div>
+        </div>
+
+        <!-- 失敗說明 -->
+        <div id="scanFailReasonBox" style="display:none;font-size:11px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;margin-bottom:10px;line-height:1.7;">
+          ⚠️ 失敗原因可能為：<br>
+          • 非交易時段（盤前/盤後）— 即時成交價尚未產生<br>
+          • 股票停牌或暫停買賣<br>
+          • GAS 快取尚未建立（需設定每日觸發器）<br>
+          • 可點「重試失敗」或使用「查詢特定股價（含昨收）」
+        </div>
+
+        <!-- 失敗列表 -->
+        <div id="scanResultFailWrapper" style="display:none;margin-bottom:12px;">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">失敗股票：</div>
+          <div id="scanResultFailList" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+        </div>
+
+        <!-- 查詢特定股價（含昨收fallback） -->
+        <div style="border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:12px;background:var(--surface2);">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">🔍 查詢特定股票現價（含昨收）</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">輸入代號，盤後會自動取昨收價。可輸入多個，用逗號或空格分隔。</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="singlePriceInput" class="form-input" style="flex:1;font-family:'JetBrains Mono',monospace;" placeholder="例: 6419 2330 7734">
+            <button class="btn" onclick="fetchSpecificPrices()">查詢</button>
+          </div>
+          <div id="singlePriceResult" style="margin-top:8px;font-size:12px;color:var(--text2);min-height:20px;"></div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn" onclick="document.getElementById('scanResultModal').classList.remove('open')">關閉</button>
+          <button class="btn gold" id="retryFailedBtn" onclick="retryFailedCodes()" style="display:none;">🔄 重試失敗（含昨收）</button>
+        </div>
+      </div>
+    </div>
+
     <script>
     // ============================================================
     // EMBEDDED STOCK DATA
@@ -1180,8 +1230,11 @@ let ledgerSortDir = -1;
   </tr>`;
 
       document.getElementById('ledgerBody').innerHTML = data.map(r => {
-        const lp = livePrices[r.code]||r.buyPrice;
-        const isLive = !!livePrices[r.code];
+        // 若現價快取不是今日更新的，不能用舊快取算損益（避免新買股票顯示假漲幅）
+        const todayStr = new Date().toISOString().split('T')[0];
+        const priceIsToday = livePriceTimestamp && new Date(livePriceTimestamp).toISOString().split('T')[0] === todayStr;
+        const lp = (priceIsToday && livePrices[r.code]) ? livePrices[r.code] : r.buyPrice;
+        const isLive = !!(priceIsToday && livePrices[r.code]);
         const invested = r.shares*r.buyPrice;
         const curVal = r.shares*lp;
         const pnl = curVal-invested;
@@ -1339,6 +1392,7 @@ function sortLedgerBy(col) {
         status.style.color = 'var(--green)';
         livePriceTimestamp = Date.now();
         savePricesToLocal();
+      if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
         renderPerf();
         renderLedger();
         setTimeout(() => {
@@ -1643,15 +1697,15 @@ function sortLedgerBy(col) {
 
         if(prices && Object.keys(prices).length > 0) {
           let updated = 0;
-          codes.forEach(c => { if(prices[c] > 0) { livePrices[c] = prices[c]; updated++; } });
+          const failedCodes = [];
+          codes.forEach(c => {
+            if(prices[c] > 0) { livePrices[c] = prices[c]; updated++; }
+            else failedCodes.push(c);
+          });
           livePriceTimestamp = Date.now();
           savePricesToLocal();
           if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
-          const msg = updated === codes.length
-            ? `✓ 全部 ${updated} 檔成功`
-            : updated > 0 ? `⚠️ 部分成功 ${updated}/${codes.length}（非交易時間則屬正常）`
-            : '⚠️ GAS查詢完成，目前無即時成交價（非交易時間）';
-          showToast(msg, updated > 0 ? 'ok' : 'fail');
+          showScanResultModal(updated, codes.length - updated, failedCodes);
           renderPerf(); renderLedger(); return;
         }
         showToast('GAS查詢失敗，改用Proxy...', 'fail');
@@ -1679,16 +1733,8 @@ function sortLedgerBy(col) {
       savePricesToLocal();
       if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
 
-      const noPrice = codes.filter(c => !prices[c]).length;
-      let msg;
-      if (updated === codes.length) {
-        msg = `✓ 全部 ${updated} 檔取得即時成交價`;
-      } else if (updated > 0) {
-        msg = `✓ ${updated}/${codes.length} 檔有即時成交價，${noPrice} 檔無成交（可能尚未開盤或停牌）`;
-      } else {
-        msg = '⚠️ 全部無即時成交價，請確認是否為交易時段或 Proxy 設定';
-      }
-      showToast(msg, updated > 0 ? 'ok' : 'fail');
+      const failedCodes = codes.filter(c => !prices[c]);
+      showScanResultModal(updated, failedCodes.length, failedCodes);
       renderPerf(); renderLedger();
     }
 
@@ -3002,6 +3048,8 @@ function sortLedgerBy(col) {
         }
 
         livePriceTimestamp = Date.now();
+        savePricesToLocal();
+        if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
         renderPerf(); renderLedger();
         hideLoading();
         document.getElementById('histPriceModal').classList.remove('open');
@@ -3011,6 +3059,166 @@ function sortLedgerBy(col) {
         statusEl.textContent = '❌ 查詢失敗: ' + e.message;
         statusEl.style.color = 'var(--red)';
       }
+    }
+
+    // ============================================================
+    // 掃描結果 Modal
+    // ============================================================
+    let _lastFailedCodes = [];
+
+    function showScanResultModal(success, fail, failedCodes) {
+      _lastFailedCodes = failedCodes || [];
+      document.getElementById('scanResultSuccess').textContent = success;
+      document.getElementById('scanResultFail').textContent = fail;
+
+      const wrapEl = document.getElementById('scanResultFailWrapper');
+      const listEl = document.getElementById('scanResultFailList');
+      const reasonBox = document.getElementById('scanFailReasonBox');
+      const retryBtn = document.getElementById('retryFailedBtn');
+      const singleInput = document.getElementById('singlePriceInput');
+
+      if(_lastFailedCodes.length > 0) {
+        wrapEl.style.display = 'block';
+        reasonBox.style.display = 'block';
+        retryBtn.style.display = 'inline-flex';
+        listEl.innerHTML = _lastFailedCodes.map(c => {
+          const s = STOCKS_RAW.find(x => x['代號'] === c);
+          const name = s ? s['名稱'] : '';
+          return `<span style="display:inline-block;background:var(--red-dim);color:var(--red);border-radius:4px;padding:2px 8px;font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;" title="點擊填入查詢框" onclick="appendSingleInput('${c}')">${c}${name?' '+name:''}</span>`;
+        }).join('');
+        // 預填失敗代號到查詢框
+        singleInput.value = _lastFailedCodes.join(' ');
+      } else {
+        wrapEl.style.display = 'none';
+        reasonBox.style.display = 'none';
+        retryBtn.style.display = 'none';
+        listEl.innerHTML = '';
+        singleInput.value = '';
+      }
+
+      document.getElementById('singlePriceResult').textContent = '';
+      document.getElementById('scanResultModal').classList.add('open');
+    }
+
+    function appendSingleInput(code) {
+      const el = document.getElementById('singlePriceInput');
+      const existing = el.value.split(/[\s,]+/).filter(Boolean);
+      if(!existing.includes(code)) existing.push(code);
+      el.value = existing.join(' ');
+    }
+
+    // 重試失敗股票，這次允許 fallback 昨收
+    async function retryFailedCodes() {
+      if(!_lastFailedCodes.length) return;
+      document.getElementById('scanResultModal').classList.remove('open');
+      await _runBatchOrProxyWithFallback(_lastFailedCodes);
+    }
+
+    // 查詢特定股票（含昨收 fallback）
+    async function fetchSpecificPrices() {
+      const raw = document.getElementById('singlePriceInput').value;
+      const codes = raw.split(/[\s,，]+/).map(c => c.trim()).filter(Boolean);
+      if(!codes.length) { document.getElementById('singlePriceResult').textContent = '請輸入股票代號'; return; }
+
+      const resultEl = document.getElementById('singlePriceResult');
+      resultEl.textContent = `查詢 ${codes.length} 檔中...`;
+
+      const prices = await _fetchPricesWithFallback(codes);
+      let html = '';
+      let found = 0;
+      codes.forEach(c => {
+        const s = STOCKS_RAW.find(x => x['代號'] === c);
+        const name = s ? s['名稱'] : '';
+        if(prices[c] > 0) {
+          livePrices[c] = prices[c];
+          found++;
+          html += `<span style="color:var(--green);margin-right:8px;">✓ ${c}${name?' '+name:''} = ${prices[c]}</span>`;
+        } else {
+          html += `<span style="color:var(--red);margin-right:8px;">✗ ${c}${name?' '+name:''} 查無</span>`;
+        }
+      });
+      resultEl.innerHTML = html;
+      if(found > 0) {
+        livePriceTimestamp = Date.now();
+        savePricesToLocal();
+        if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
+        renderPerf(); renderLedger();
+      }
+    }
+
+    // 批次查詢含昨收 fallback（非交易時間也能拿到價格）
+    async function _fetchPricesWithFallback(codes) {
+      const mode = document.getElementById('proxyMode')?.value || proxyMode;
+      const result = {};
+
+      // GAS 模式：直接呼叫 GAS，GAS 端會用 readPriceSheet 或 fetchAllMarketPrices
+      if(mode === 'gas' && gasUrl) {
+        try {
+          const params = new URLSearchParams({ action: 'getBatchPricesWithFallback', codes: codes.join(',') });
+          const r = await fetch(`${gasUrl}?${params}`, {
+            method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+            headers: {'Accept': 'application/json'}
+          });
+          if(r.ok) {
+            const d = await r.json();
+            if(d.prices) Object.assign(result, d.prices);
+          }
+        } catch(e) { console.warn('GAS fallback query failed', e); }
+        // 若 GAS 成功取得部分，直接回傳
+        if(Object.keys(result).length > 0) return result;
+      }
+
+      // Proxy 模式：改用 item.y（昨收）fallback
+      const CHUNK = 15;
+      for(const exchange of ['tse', 'otc']) {
+        const remaining = codes.filter(c => !result[c]);
+        if(!remaining.length) break;
+        for(let i = 0; i < remaining.length; i += CHUNK) {
+          const chunk = remaining.slice(i, i + CHUNK);
+          const ex_ch = chunk.map(c => `${exchange}_${c}.tw`).join('|') + '|';
+          const targetUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=${ex_ch}`;
+          const proxyUrl = buildProxyUrl(targetUrl);
+          if(!proxyUrl) continue;
+          try {
+            const res = await fetchWithTimeout(proxyUrl, 15000);
+            if(res.ok) {
+              const d = JSON.parse(await res.text());
+              (d.msgArray || []).forEach(item => {
+                const code = item.c;
+                if(!code || result[code]) return;
+                // 優先用即時價 z，若無（盤後/非交易時間）則用昨收 y
+                const priceStr = (item.z && item.z !== '-' && item.z !== '') ? item.z : item.y;
+                const price = parseFloat(priceStr);
+                if(price > 0) result[code] = price;
+              });
+            }
+          } catch(e) {}
+          if(i + CHUNK < remaining.length) await new Promise(r => setTimeout(r, 800));
+        }
+      }
+      return result;
+    }
+
+    // 重試模式：同樣含 fallback，完成後顯示 modal
+    async function _runBatchOrProxyWithFallback(codes) {
+      showLoading(`重試查詢 ${codes.length} 檔（含昨收）...`);
+      const prices = await _fetchPricesWithFallback(codes);
+      hideLoading();
+
+      let updated = 0;
+      const stillFailed = [];
+      codes.forEach(c => {
+        if(prices[c] > 0) { livePrices[c] = prices[c]; updated++; }
+        else stillFailed.push(c);
+      });
+
+      if(updated > 0) {
+        livePriceTimestamp = Date.now();
+        savePricesToLocal();
+        if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
+        renderPerf(); renderLedger();
+      }
+      showScanResultModal(updated, stillFailed.length, stillFailed);
     }
     </script>
     </body>
