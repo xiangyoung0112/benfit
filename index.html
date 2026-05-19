@@ -1669,7 +1669,7 @@ function sortLedgerBy(col) {
         });
         showProgress(done, total);
         document.getElementById('loadingText').textContent =
-          `Proxy查詢中（TSE→OTC）... ｜✓ ${updated} 筆有即時成交價`;
+          `Proxy查詢中（TSE→OTC）... ｜✓ ${updated}/${codes.length} 筆有即時成交價`;
       });
 
       hideProgress();
