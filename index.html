@@ -484,6 +484,7 @@
         <button class="btn ghost" onclick="openHistPriceModal()">📅 指定日期現價</button>
         <button class="btn ghost" onclick="recalcAllLedgerShares()">🔄 更新全帳本股數(5萬)</button>
         <button class="btn ghost" onclick="loadLedgerFromGAS()">☁️ 從GAS載入</button>
+        <button class="btn ghost" onclick="loadPricesFromGAS()">📡 從GAS同步現價</button>
         <button class="btn ghost" onclick="openAddLedgerModal()">📅 新增帳本</button>
         <button class="btn ghost" onclick="openAddManual()">＋ 手動新增</button>
       </div>
@@ -2477,6 +2478,7 @@ function sortLedgerBy(col) {
       const a = (e.parameter || {}).action;
       if (a === 'ping')            return json({status:'ok', time: new Date().toISOString()});
       if (a === 'getLedger')       return json({data: readAllLedgers()});
+      if (a === 'getPriceCacheInfo') return json(getPriceCacheInfo());
       if (a === 'getBatchPrices') {
         const codes = (e.parameter.codes || '').split(',').filter(Boolean);
         return json({prices: getBatchPrices(codes)});
@@ -2670,6 +2672,16 @@ function sortLedgerBy(col) {
         if (code && price > 0) result[code] = price;
       });
       return result;
+    }
+
+    function getPriceCacheInfo() {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const s = ss.getSheetByName(PRICE_SHEET);
+      if (!s) return { updatedAt: null, count: 0 };
+      const rows = s.getDataRange().getValues();
+      // 取第一筆資料的更新時間欄（第3欄）
+      const updatedAt = rows.length > 1 ? String(rows[1][2]) : null;
+      return { updatedAt, count: rows.length - 1 };
     }
 
     // ─── 帳本讀寫 ────────────────────────────────────────────
@@ -2959,6 +2971,65 @@ function sortLedgerBy(col) {
       }
     }
 
+    async function loadPricesFromGAS() {
+      if(!gasUrl) { showToast('請先設定GAS URL','fail'); return; }
+      showLoading('從GAS同步現價快取...');
+      try {
+        const r = await fetch(`${gasUrl}?action=getBatchPrices&codes=`, {
+          method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+          headers: {'Accept': 'application/json'}
+        });
+        if(!r.ok) throw new Error(`HTTP ${r.status}`);
+        const d = await r.json();
+        const prices = d.prices || {};
+        const count = Object.keys(prices).length;
+        if(count === 0) { hideLoading(); showToast('GAS無現價快取，請先在GAS執行 updateAllPrices()','fail'); return; }
+
+        // 讀取GAS工作表的更新時間（從回傳資料推算不到，改用請求時間）
+        // 改用專門的action讀取快取時間
+        let gasUpdateTime = null;
+        try {
+          const r2 = await fetch(`${gasUrl}?action=getPriceCacheInfo`, {
+            method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+            headers: {'Accept': 'application/json'}
+          });
+          if(r2.ok) {
+            const d2 = await r2.json();
+            if(d2.updatedAt) gasUpdateTime = d2.updatedAt;
+          }
+        } catch(e) {}
+
+        Object.assign(livePrices, prices);
+        livePriceTimestamp = Date.now();
+
+        // 儲存到localStorage，並額外記錄GAS掃描時間
+        localStorage.setItem('livePrices_cache', JSON.stringify(livePrices));
+        localStorage.setItem('livePrices_ts', livePriceTimestamp.toString());
+        if(gasUpdateTime) localStorage.setItem('livePrices_gas_scan_time', gasUpdateTime);
+
+        updatePriceCacheBadge();
+        renderPerf(); renderLedger();
+        hideLoading();
+
+        const scanNote = gasUpdateTime ? `（GAS掃描時間：${gasUpdateTime}）` : '（掃描時間未知，請確認GAS工作表）';
+        showToast(`✓ 已從GAS同步 ${count} 筆現價 ${scanNote}`, 'ok');
+        
+        // 跳出提醒 modal
+        showGasPriceSyncInfo(count, gasUpdateTime);
+      } catch(e) {
+        hideLoading();
+        showToast('從GAS同步失敗: ' + e.message, 'fail');
+      }
+    }
+
+    function showGasPriceSyncInfo(count, gasUpdateTime) {
+      const timeStr = gasUpdateTime || '未知（GAS未回傳時間戳）';
+      // 本地快取寫入時間
+      const localTs = localStorage.getItem('livePrices_gas_scan_time') || gasUpdateTime;
+      const msg = `📡 GAS現價同步完成\n\n共載入：${count} 筆\nGAS掃描時間：${timeStr}\n\n⚠️ 注意：這是GAS工作表快取的數據，非即時行情。若需最新現價，請點「更新現價」。`;
+      alert(msg);
+    }
+
     function updatePriceCacheBadge() {
       const badge = document.getElementById('priceCacheBadge');
       if (!badge) return;
@@ -2972,8 +3043,11 @@ function sortLedgerBy(col) {
       const dd = String(d.getDate()).padStart(2,'0');
       const hh = String(d.getHours()).padStart(2,'0');
       const mi = String(d.getMinutes()).padStart(2,'0');
-      badge.textContent = `現價 ${mm}/${dd} ${hh}:${mi}`;
+      const gasScanTime = localStorage.getItem('livePrices_gas_scan_time');
+      const scanNote = gasScanTime ? ` (GAS:${gasScanTime.substring(5,16)})` : '';
+      badge.textContent = `現價 ${mm}/${dd} ${hh}:${mi}${scanNote}`;
       badge.className = 'price-cache-badge ' + (diffHrs < 8 ? 'fresh' : 'stale');
+      badge.title = gasScanTime ? `GAS掃描時間：${gasScanTime}` : '本地更新時間：' + d.toLocaleString('zh-TW');
     }
 
     // ============================================================
