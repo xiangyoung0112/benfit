@@ -2975,7 +2975,12 @@ function sortLedgerBy(col) {
       if(!gasUrl) { showToast('請先設定GAS URL','fail'); return; }
       showLoading('從GAS同步現價快取...');
       try {
-        const r = await fetch(`${gasUrl}?action=getBatchPrices&codes=`, {
+        const codeSet = new Set();
+        Object.values(ledger).forEach(stocks => stocks.forEach(s => { if(s.code) codeSet.add(s.code); }));
+        const codes = [...codeSet];
+        if(!codes.length) { hideLoading(); showToast('帳本無任何股票','fail'); return; }
+
+        const r = await fetch(`${gasUrl}?action=getBatchPrices&codes=${codes.join(',')}`, {
           method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
           headers: {'Accept': 'application/json'}
         });
@@ -2983,7 +2988,7 @@ function sortLedgerBy(col) {
         const d = await r.json();
         const prices = d.prices || {};
         const count = Object.keys(prices).length;
-        if(count === 0) { hideLoading(); showToast('GAS無現價快取，請先在GAS執行 updateAllPrices()','fail'); return; }
+        if(count === 0) { hideLoading(); showToast('GAS快取無此帳本股票的現價，請先執行 updateAllPrices()','fail'); return; }
 
         // 讀取GAS工作表的更新時間（從回傳資料推算不到，改用請求時間）
         // 改用專門的action讀取快取時間
