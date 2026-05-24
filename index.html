@@ -487,6 +487,17 @@
         <button class="btn ghost" onclick="loadPricesFromGAS()">📡 從GAS同步現價</button>
         <button class="btn ghost" onclick="openAddLedgerModal()">📅 新增帳本</button>
         <button class="btn ghost" onclick="openAddManual()">＋ 手動新增</button>
+
+        <!-- 快速現價查詢欄（加在帳本 toolbar 最後） -->
+        <div style="display:flex;gap:6px;align-items:center;width:100%;margin-top:6px;flex-wrap:wrap;">
+          <input type="text" id="quickPriceInput" 
+            placeholder="輸入代號查詢現價，如：2330 2317"
+            style="flex:1;min-width:180px;background:var(--surface2);border:1px solid var(--border);
+                   color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;
+                   padding:7px 10px;border-radius:var(--r);outline:none;">
+          <button class="btn ghost" onclick="quickFetchPrice()" id="quickPriceBtn">🔍 查詢現價</button>
+          <span id="quickPriceResult" style="font-size:12px;font-family:'JetBrains Mono',monospace;"></span>
+        </div>
       </div>
 
       <div id="ledgerPriceBanner" style="display:none;margin-bottom:10px;padding:8px 14px;background:var(--red-dim);border:1px solid var(--red2);border-radius:var(--r);font-size:12px;color:var(--red);">
@@ -789,6 +800,23 @@
           <div id="scanResultFailList" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
         </div>
 
+        <!-- 手動填入失敗股票現價 -->
+        <div id="scanManualInputWrap" style="margin-top:12px;display:none;margin-bottom:12px;">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">
+            ✏️ 直接填入失敗股票的現價（格式：代號=價格，每行一筆）：
+          </div>
+          <textarea id="scanManualPriceInput"
+            style="width:100%;height:100px;background:var(--surface2);border:1px solid var(--border);
+                   color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;
+                   padding:8px;border-radius:var(--r);outline:none;resize:vertical;"
+            placeholder="2330=800&#10;9999=150&#10;1234=250"></textarea>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn green" style="font-size:12px;padding:5px 12px;"
+                    onclick="applyScanManualPrices()">✅ 套用手動現價</button>
+            <span id="scanManualStatus" style="font-size:12px;color:var(--text2);align-self:center;"></span>
+          </div>
+        </div>
+
         <!-- 查詢特定股價（含昨收fallback） -->
         <div style="border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:12px;background:var(--surface2);">
           <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">🔍 查詢特定股票現價（含昨收）</div>
@@ -806,6 +834,17 @@
         </div>
       </div>
     </div>
+
+  <!-- GAS 同步結果 Modal -->
+  <div class="modal-bg" id="gasSyncInfoModal">
+    <div class="modal" style="max-width:420px;">
+      <h3>📡 GAS 現價同步完成</h3>
+      <div id="gasSyncInfoBody" style="font-size:13px;color:var(--text2);line-height:1.8;margin-bottom:16px;"></div>
+      <div class="modal-actions">
+        <button class="btn" onclick="document.getElementById('gasSyncInfoModal').classList.remove('open')">確認</button>
+      </div>
+    </div>
+  </div>
 
     <script>
     // ============================================================
@@ -858,7 +897,7 @@ let ledgerSortDir = -1;
         const job = syncQueue.shift();
         document.getElementById('syncQueueText').textContent = job.label || '同步中...';
         document.getElementById('syncQueue').classList.add('show');
-        try { await job.fn(); } catch(e) { console.warn('Background sync failed:', e); }
+        try { await job.fn(); } catch(e) { console.warn('Background sync failed:', e); showToast(`☁️ ${job.label || '同步'}失敗：${e.message}`, 'fail'); }
       }
       syncRunning = false;
       document.getElementById('syncIndicator').classList.remove('active');
@@ -1435,7 +1474,12 @@ function sortLedgerBy(col) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        const res = await fetch(url, {signal: controller.signal, headers: {'Accept': 'application/json'}});
+      const res = await fetch(url, {
+        signal: controller.signal,
+        mode: 'cors',
+        credentials: 'omit',
+        headers: {'Accept': 'application/json'}
+      });
         clearTimeout(timeoutId);
         return res;
       } catch(e) {
@@ -2317,6 +2361,7 @@ function sortLedgerBy(col) {
         const data = ledger[ledgerDate] || [];
         const r = await fetch(gasUrl, {
           method: 'POST', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+          headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify({ action: 'saveLedger', date: ledgerDate, data })
         });
         if(!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -2332,6 +2377,7 @@ function sortLedgerBy(col) {
       const now = new Date().toISOString().split('T')[0];
       const r = await fetch(gasUrl, {
         method: 'POST', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ action: 'savePriceCache', date: now, prices })
       });
       if(!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -2341,7 +2387,7 @@ function sortLedgerBy(col) {
     async function saveTodayPricesToGAS(stocks, date) {
       if(!gasUrl) return;
       const priceData = stocks.map(s=>({date,code:s['代號'],name:s['名稱'],cat:s['分類'],price:livePrices[s['代號']]||s['現價'],score:s['貝氏評分']}));
-      const r = await fetch(gasUrl,{method:'POST',mode:'cors',cache:'no-cache',credentials:'omit',
+      const r = await fetch(gasUrl,{method:'POST',mode:'cors',cache:'no-cache',credentials:'omit',headers:{ 'Content-Type': 'text/plain' },
         body:JSON.stringify({action:'savePrices',data:priceData,date})});
       if(!r.ok) throw new Error(`HTTP ${r.status}`);
       return await r.json();
@@ -2483,6 +2529,10 @@ function sortLedgerBy(col) {
         const codes = (e.parameter.codes || '').split(',').filter(Boolean);
         return json({prices: getBatchPrices(codes)});
       }
+      if (a === 'getBatchPricesWithFallback') {
+        const codes = (e.parameter.codes || '').split(',').filter(Boolean);
+        return json({prices: getBatchPrices(codes)});
+      }
       if (a === 'getHistoricalPrices') {
         const codes = (e.parameter.codes || '').split(',').filter(Boolean);
         const dateStr = e.parameter.date || '';
@@ -2501,6 +2551,7 @@ function sortLedgerBy(col) {
         if (b.action === 'saveLedger') return json({status:'ok', count: writeLedgerSheet(b.date, b.data)});
         if (b.action === 'savePriceCache') return json({status:'ok', count: writePriceCacheSheet(b.date, b.prices)});
         if (b.action === 'getBatchPrices') return json({prices: getBatchPrices(b.codes || [])});
+        if (b.action === 'getBatchPricesWithFallback') return json({prices: getBatchPrices(b.codes || [])});
         if (b.action === 'getHistoricalPrices') return json({prices: getHistoricalPrices(b.codes || [], b.date || '')});
         return json({error:'unknown action'});
       } catch(err) {
@@ -2980,9 +3031,10 @@ function sortLedgerBy(col) {
         const codes = [...codeSet];
         if(!codes.length) { hideLoading(); showToast('帳本無任何股票','fail'); return; }
 
-        const r = await fetch(`${gasUrl}?action=getBatchPrices&codes=${codes.join(',')}`, {
-          method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
-          headers: {'Accept': 'application/json'}
+        const r = await fetch(gasUrl, {
+          method: 'POST', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ action: 'getBatchPrices', codes })
         });
         if(!r.ok) throw new Error(`HTTP ${r.status}`);
         const d = await r.json();
@@ -3029,10 +3081,18 @@ function sortLedgerBy(col) {
 
     function showGasPriceSyncInfo(count, gasUpdateTime) {
       const timeStr = gasUpdateTime || '未知（GAS未回傳時間戳）';
-      // 本地快取寫入時間
-      const localTs = localStorage.getItem('livePrices_gas_scan_time') || gasUpdateTime;
-      const msg = `📡 GAS現價同步完成\n\n共載入：${count} 筆\nGAS掃描時間：${timeStr}\n\n⚠️ 注意：這是GAS工作表快取的數據，非即時行情。若需最新現價，請點「更新現價」。`;
-      alert(msg);
+    document.getElementById('gasSyncInfoBody').innerHTML = `
+      <div style="display:grid;gap:8px;">
+        <div>✅ 共載入：<b>${count}</b> 筆現價</div>
+        <div>🕐 GAS掃描時間：<b>${timeStr}</b></div>
+        <div style="margin-top:8px;padding:10px;background:var(--gold-dim);border-radius:var(--r);
+                    border:1px solid rgba(200,125,26,0.3);font-size:12px;color:var(--gold);">
+          ⚠️ 這是GAS工作表的快取數據，非即時行情。<br>
+          如需最新現價，請點「🔄 更新現價」。
+        </div>
+      </div>
+    `;
+    document.getElementById('gasSyncInfoModal').classList.add('open');
     }
 
     function updatePriceCacheBadge() {
@@ -3156,6 +3216,10 @@ function sortLedgerBy(col) {
       const retryBtn = document.getElementById('retryFailedBtn');
       const singleInput = document.getElementById('singlePriceInput');
 
+      const manualWrap = document.getElementById('scanManualInputWrap');
+      const manualInput = document.getElementById('scanManualPriceInput');
+      const manualStatus = document.getElementById('scanManualStatus');
+
       if(_lastFailedCodes.length > 0) {
         wrapEl.style.display = 'block';
         reasonBox.style.display = 'block';
@@ -3167,12 +3231,18 @@ function sortLedgerBy(col) {
         }).join('');
         // 預填失敗代號到查詢框
         singleInput.value = _lastFailedCodes.join(' ');
+        
+        // 預填手動輸入區塊
+        manualWrap.style.display = 'block';
+        manualInput.value = _lastFailedCodes.map(c => `${c}=`).join('\n');
+        if(manualStatus) manualStatus.textContent = '';
       } else {
         wrapEl.style.display = 'none';
         reasonBox.style.display = 'none';
         retryBtn.style.display = 'none';
         listEl.innerHTML = '';
         singleInput.value = '';
+        manualWrap.style.display = 'none';
       }
 
       document.getElementById('singlePriceResult').textContent = '';
@@ -3191,6 +3261,38 @@ function sortLedgerBy(col) {
       if(!_lastFailedCodes.length) return;
       document.getElementById('scanResultModal').classList.remove('open');
       await _runBatchOrProxyWithFallback(_lastFailedCodes);
+    }
+
+    // 套用掃描結果彈窗內的手動現價
+    function applyScanManualPrices() {
+      const raw = document.getElementById('scanManualPriceInput').value;
+      const statusEl = document.getElementById('scanManualStatus');
+      const lines = raw.split(/\n/).map(l => l.trim()).filter(Boolean);
+      let applied = 0, skipped = 0;
+
+      lines.forEach(line => {
+        const [code, priceStr] = line.split('=').map(s => s.trim());
+        const price = parseFloat(priceStr);
+        if(code && price > 0) {
+          livePrices[code] = price;
+          applied++;
+        } else {
+          skipped++;
+        }
+      });
+
+      if(applied > 0) {
+        livePriceTimestamp = Date.now();
+        savePricesToLocal();
+        if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
+        renderPerf(); renderLedger();
+        statusEl.textContent = `✅ 已套用 ${applied} 筆${skipped>0?`，${skipped} 筆格式有誤跳過`:''}`;
+        statusEl.style.color = 'var(--green)';
+        showToast(`✓ 手動填入 ${applied} 筆現價`, 'ok');
+      } else {
+        statusEl.textContent = '⚠️ 沒有有效的價格，請確認格式為「代號=數字」';
+        statusEl.style.color = 'var(--red)';
+      }
     }
 
     // 查詢特定股票（含昨收 fallback）
@@ -3222,6 +3324,53 @@ function sortLedgerBy(col) {
         savePricesToLocal();
         if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
         renderPerf(); renderLedger();
+      }
+    }
+
+    async function quickFetchPrice() {
+      const raw = document.getElementById('quickPriceInput').value;
+      const codes = raw.split(/[\s,，]+/).map(c => c.trim()).filter(Boolean);
+      const resultEl = document.getElementById('quickPriceResult');
+      const btn = document.getElementById('quickPriceBtn');
+
+      if(!codes.length) { resultEl.textContent = '請輸入至少一個代號'; resultEl.style.color='var(--red)'; return; }
+
+      btn.disabled = true;
+      resultEl.style.color = 'var(--text2)';
+      resultEl.textContent = `查詢中...（${codes.length} 檔）`;
+
+      try {
+        const prices = await _fetchPricesWithFallback(codes);
+        let html = '';
+        let foundCount = 0;
+
+        codes.forEach(c => {
+          if(prices[c] > 0) {
+            livePrices[c] = prices[c];
+            foundCount++;
+            html += `<span style="color:var(--green);margin-right:10px;">✓ ${c} = <b>${prices[c]}</b></span>`;
+          } else {
+            html += `<span style="color:var(--red);margin-right:10px;">✗ ${c} 查無（非交易時間或代號錯誤）</span>`;
+          }
+        });
+
+        resultEl.innerHTML = html;
+
+        if(foundCount > 0) {
+          livePriceTimestamp = Date.now();
+          savePricesToLocal();
+          if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價...');
+          renderPerf(); renderLedger();
+          showToast(`✓ 已寫入 ${foundCount} 筆現價`, 'ok');
+        } else {
+          showToast('所有代號均查無現價，請確認是否為交易時間', 'fail');
+        }
+      } catch(e) {
+        resultEl.textContent = `❌ 查詢失敗：${e.message}`;
+        resultEl.style.color = 'var(--red)';
+        showToast('查詢失敗：' + e.message, 'fail');
+      } finally {
+        btn.disabled = false;
       }
     }
 
