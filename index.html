@@ -846,6 +846,19 @@
       </div>
     </div>
 
+    <!-- 開啟歡迎 / 快取資訊 Modal -->
+    <div class="modal-bg" id="welcomeModal">
+      <div class="modal" style="max-width:420px;">
+        <h3>📡 系統狀態</h3>
+        <div id="welcomeModalBody" style="font-size:13px;color:var(--text2);line-height:2;margin-bottom:16px;"></div>
+        <div class="modal-actions">
+          <button class="btn ghost" onclick="document.getElementById('welcomeModal').classList.remove('open')">略過</button>
+          <button class="btn ghost" onclick="document.getElementById('welcomeModal').classList.remove('open');loadPricesFromGAS()">📡 從GAS同步現價</button>
+          <button class="btn green" onclick="document.getElementById('welcomeModal').classList.remove('open');fetchAllLedgerPrices()">⚡ 即時更新現價</button>
+        </div>
+      </div>
+    </div>
+
       <script>
       // ============================================================
       // EMBEDDED STOCK DATA
@@ -929,6 +942,9 @@
         if(gasUrl) {
           loadLedgerFromGAS(true);
         }
+
+        // 開啟時顯示快取狀態彈窗
+        showWelcomeModal();
 
         document.addEventListener('click', e => {
           if(!e.target.closest('.export-wrap')) {
@@ -2515,6 +2531,11 @@
         document.getElementById('gasCode').value = `// ====== 台股績效系統 GAS 後端 v3 ======
       // 資料來源：TWSE openapi（上市）+ TPEx openapi（上櫃）
       // 部署：執行身份「以我的身份」、存取「任何人」
+      // 定時觸發器設定：
+      //   GAS 編輯器 → 左側「觸發條件」→ 新增觸發條件
+      //   函式：updateAllPrices
+      //   觸發類型：時間型（日計時器）
+      //   時間：下午 1:00 ~ 2:00（即每日 13:xx 自動執行，通常約 13:40 完成）
 
       const PRICE_SHEET   = '全台股現價';
       const LEDGER_PREFIX = '帳本_';
@@ -3111,6 +3132,120 @@
         badge.textContent = `現價 ${mm}/${dd} ${hh}:${mi}${scanNote}`;
         badge.className = 'price-cache-badge ' + (diffHrs < 8 ? 'fresh' : 'stale');
         badge.title = gasScanTime ? `GAS掃描時間：${gasScanTime}` : '本地更新時間：' + d.toLocaleString('zh-TW');
+      }
+
+      // ============================================================
+      // 開啟歡迎彈窗：顯示上次快取更新時間（優先查詢 GAS 端）
+      // ============================================================
+      async function showWelcomeModal() {
+        document.getElementById('welcomeModalBody').innerHTML = `
+          <div style="display:flex;align-items:center;gap:10px;color:var(--text3);">
+            <div class="sync-spinner"></div> 查詢 GAS 端快取狀態中...
+          </div>`;
+        document.getElementById('welcomeModal').classList.add('open');
+
+        // ── 1. 嘗試從 GAS 取得最新掃描時間 ──
+        let gasUpdatedAt = null;
+        let gasCount = null;
+
+        if (gasUrl) {
+          try {
+            const r = await Promise.race([
+              fetch(`${gasUrl}?action=getPriceCacheInfo`, {
+                method: 'GET', mode: 'cors', cache: 'no-cache', credentials: 'omit',
+                headers: { 'Accept': 'application/json' }
+              }),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000))
+            ]);
+            if (r.ok) {
+              const d = await r.json();
+              gasUpdatedAt = d.updatedAt || null;
+              gasCount     = d.count     || null;
+              // 順便存回 localStorage，讓 badge 也能更新
+              if (gasUpdatedAt) localStorage.setItem('livePrices_gas_scan_time', gasUpdatedAt);
+            }
+          } catch(e) {
+            console.warn('getPriceCacheInfo 失敗:', e.message);
+          }
+        }
+
+        // ── 2. Local 快取資訊 ──
+        const localTs    = localStorage.getItem(PRICE_CACHE_TS_KEY);
+        const localCount = Object.keys(livePrices).length;
+
+        // ── 3. 組裝 GAS 區塊 ──
+        let gasBlock = '';
+        if (!gasUrl) {
+          gasBlock = `<div style="color:var(--text3);font-size:12px;">⚙️ 尚未設定 GAS URL，無法查詢 GAS 端狀態。</div>`;
+        } else if (gasUpdatedAt) {
+          const gasD    = new Date(gasUpdatedAt);
+          const diffMin = Math.floor((Date.now() - gasD.getTime()) / 60000);
+          const diffHrs = Math.floor(diffMin / 60);
+
+          let freshness = '';
+          if      (diffMin < 60)  freshness = `<span style="color:var(--green);">✅ 剛更新（${diffMin} 分鐘前）</span>`;
+          else if (diffHrs < 8)   freshness = `<span style="color:var(--green);">✅ 今日有更新（${diffHrs} 小時前）</span>`;
+          else if (diffHrs < 24)  freshness = `<span style="color:var(--gold);">⚠️ 較舊（${diffHrs} 小時前）</span>`;
+          else                    freshness = `<span style="color:var(--red);">❌ 超過24小時，建議更新</span>`;
+
+          gasBlock = `
+            <div style="background:var(--surface2);padding:12px;border-radius:var(--r);border:1px solid var(--border);display:grid;gap:6px;">
+              <div style="font-weight:600;color:var(--text2);">📡 GAS 端快取</div>
+              <div>🕐 掃描時間：<b>${gasD.toLocaleString('zh-TW')}</b></div>
+              ${gasCount !== null ? `<div>📦 快取股票：<b>${gasCount}</b> 檔</div>` : ''}
+              <div>狀態：${freshness}</div>
+            </div>`;
+        } else {
+          gasBlock = `
+            <div style="background:var(--red-dim);padding:12px;border-radius:var(--r);border:1px solid var(--red2);color:var(--red);">
+              ❌ GAS 端目前無快取，請先在 GAS 執行 <code>updateAllPrices()</code> 或等待每日 13:40 自動觸發。
+            </div>`;
+        }
+
+        // ── 4. 組裝 Local 區塊 ──
+        let localBlock = '';
+        if (localTs) {
+          const d       = new Date(Number(localTs));
+          const diffMin = Math.floor((Date.now() - Number(localTs)) / 60000);
+          const diffHrs = Math.floor(diffMin / 60);
+          let tag = '';
+          if      (diffMin < 60)  tag = `<span style="color:var(--green);">✅ ${diffMin} 分鐘前同步</span>`;
+          else if (diffHrs < 8)   tag = `<span style="color:var(--green);">✅ ${diffHrs} 小時前同步</span>`;
+          else if (diffHrs < 24)  tag = `<span style="color:var(--gold);">⚠️ ${diffHrs} 小時前同步</span>`;
+          else                    tag = `<span style="color:var(--red);">❌ 超過24小時未同步</span>`;
+
+          localBlock = `
+            <div style="background:var(--surface2);padding:12px;border-radius:var(--r);border:1px solid var(--border);display:grid;gap:6px;">
+              <div style="font-weight:600;color:var(--text2);">💾 本地快取</div>
+              <div>🕐 同步時間：<b>${d.toLocaleString('zh-TW')}</b></div>
+              <div>📦 已快取：<b>${localCount}</b> 檔</div>
+              <div>狀態：${tag}</div>
+            </div>`;
+        } else {
+          localBlock = `
+            <div style="background:var(--surface2);padding:12px;border-radius:var(--r);border:1px solid var(--border);color:var(--text3);font-size:12px;">
+              💾 本地尚無快取，建議點「立即更新現價」或「從GAS同步現價」。
+            </div>`;
+        }
+
+        // ── 5. 13:35~14:05 特別提示 ──
+        const now  = new Date();
+        const hhmm = now.getHours() * 100 + now.getMinutes();
+        const scheduleNote = (hhmm >= 1335 && hhmm <= 1405) ? `
+          <div style="padding:10px;background:var(--green-dim);border:1px solid var(--green);
+                      border-radius:var(--r);color:var(--green2);font-size:12px;">
+            🟢 現在是 13:35～14:05，GAS 正在／已完成自動掃描全台股現價，
+            建議點「從GAS同步現價」取得最新資料。
+          </div>` : '';
+
+        document.getElementById('welcomeModalBody').innerHTML = `
+          <div style="display:grid;gap:12px;">
+            ${gasBlock}
+            ${localBlock}
+            ${scheduleNote}
+          </div>`;
+
+        updatePriceCacheBadge();
       }
 
       // ============================================================
