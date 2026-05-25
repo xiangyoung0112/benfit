@@ -940,11 +940,12 @@
         loadPricesFromLocal();
 
         if(gasUrl) {
-          loadLedgerFromGAS(true);
+          loadLedgerFromGAS(true).then(() => {
+            showWelcomeModal();
+          });
+        } else {
+          showWelcomeModal();
         }
-
-        // 開啟時顯示快取狀態彈窗
-        showWelcomeModal();
 
         document.addEventListener('click', e => {
           if(!e.target.closest('.export-wrap')) {
