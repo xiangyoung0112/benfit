@@ -114,6 +114,14 @@
       .export-item:hover{background:var(--surface2);color:var(--text);}
       .export-sep{border-top:1px solid var(--border);margin:4px 0;}
 
+      /* More menu dropdown */
+      .more-wrap{position:relative;display:inline-block;}
+      .more-menu{position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r);padding:4px;min-width:200px;z-index:50;display:none;box-shadow:0 8px 24px rgba(160,80,20,0.18);}
+      .more-menu.open{display:block;}
+      .more-item{padding:8px 12px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--text2);transition:background .12s;display:flex;align-items:center;gap:8px;background:none;border:none;width:100%;text-align:left;font-family:inherit;}
+      .more-item:hover{background:var(--surface2);color:var(--text);}
+      .more-sep{border-top:1px solid var(--border);margin:4px 0;}
+
       .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
       .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:20px;}
       .chart-card.full{grid-column:1/-1;}
@@ -479,15 +487,23 @@
           </div>
 
           <button class="btn ghost" onclick="fetchLivePricesForLedger()">🔄 更新現價</button>
-          <button class="btn ghost" onclick="fetchAllLedgerPrices()">⚡ 全帳本更新現價</button>
-          <button class="btn ghost" onclick="openManualPriceModal()">✏️ 手動編輯現價</button>
-          <button class="btn ghost" onclick="openHistPriceModal()">📅 指定日期現價</button>
-          <button class="btn ghost" onclick="recalcAllLedgerShares()">🔄 更新全帳本股數(5萬)</button>
-          <button class="btn ghost" onclick="loadLedgerFromGAS()">☁️ 從GAS載入</button>
-          <button class="btn ghost" onclick="loadPricesFromGAS()">📡 從GAS同步現價</button>
           <button class="btn ghost" onclick="openAddLedgerModal()">📅 新增帳本</button>
-          <button class="btn" style="background:var(--gold-dim);border:1px solid rgba(200,125,26,0.4);color:var(--gold);" onclick="openBackfillModal()">⏪ 補登過去日期</button>
           <button class="btn ghost" onclick="openAddManual()">＋ 手動新增</button>
+
+          <div class="more-wrap">
+            <button class="btn ghost" onclick="toggleMoreMenu(event)">⋯ 更多</button>
+            <div class="more-menu" id="ledgerMoreMenu">
+              <button class="more-item" onclick="fetchAllLedgerPrices();closeMoreMenu()">⚡ 全帳本更新現價</button>
+              <button class="more-item" onclick="openManualPriceModal();closeMoreMenu()">✏️ 手動編輯現價</button>
+              <button class="more-item" onclick="openHistPriceModal();closeMoreMenu()">📅 指定日期現價</button>
+              <div class="more-sep"></div>
+              <button class="more-item" onclick="loadLedgerFromGAS();closeMoreMenu()">☁️ 從GAS載入</button>
+              <button class="more-item" onclick="loadPricesFromGAS();closeMoreMenu()">📡 從GAS同步現價</button>
+              <div class="more-sep"></div>
+              <button class="more-item" onclick="openBackfillModal();closeMoreMenu()">⏪ 補登過去日期</button>
+              <button class="more-item" onclick="recalcAllLedgerShares();closeMoreMenu()">🔄 更新全帳本股數(5萬)</button>
+            </div>
+          </div>
 
           <!-- 快速現價查詢欄（加在帳本 toolbar 最後） -->
           <div style="display:flex;gap:6px;align-items:center;width:100%;margin-top:6px;flex-wrap:wrap;">
@@ -685,7 +701,22 @@
         </div>
 
         <div class="gas-panel">
-          <h3>🗑️ 清除快取</h3>
+          <h3>� 資料備份與還原</h3>
+          <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">
+            帳本資料存在瀏覽器 localStorage，清除快取會導致資料消失。建議定期下載 JSON 備份。
+          </p>
+          <div class="gas-row" style="flex-wrap:wrap;gap:10px;">
+            <button class="btn green" onclick="backupToJSON()">⬇️ 下載 JSON 備份</button>
+            <label class="btn ghost" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+              ⬆️ 從 JSON 還原
+              <input type="file" id="restoreFileInput" accept=".json" style="display:none;" onchange="restoreFromJSON(event)">
+            </label>
+          </div>
+          <div id="backupStatus" style="margin-top:10px;font-size:12px;color:var(--text3);"></div>
+        </div>
+
+        <div class="gas-panel">
+          <h3>�🗑️ 清除快取</h3>
           <div class="gas-row">
             <button class="btn red" onclick="clearCache()">🗑️ 清除所有快取</button>
             <button class="btn red" onclick="clearAllStocks()">🗑️ 清除所有股票</button>
@@ -2052,6 +2083,18 @@
         document.getElementById('perfExportMenu').classList.remove('open');
       }
 
+      function toggleMoreMenu(e) {
+        e.stopPropagation();
+        document.getElementById('ledgerMoreMenu').classList.toggle('open');
+      }
+      function closeMoreMenu() {
+        document.getElementById('ledgerMoreMenu').classList.remove('open');
+      }
+      // 點選其他地方關閉
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.more-wrap')) closeMoreMenu();
+      });
+
       function exportPerf(type) {
         document.getElementById('perfExportMenu').classList.remove('open');
         let data = getFilteredStocks().map(enrichStock);
@@ -2552,6 +2595,62 @@
         localStorage.setItem('gasUrl', gasUrl);
         showToast('GAS URL已儲存','ok');
         document.getElementById('gasStatus').className='status-dot';
+      }
+
+      function backupToJSON() {
+        const backup = {
+          version: 1,
+          exportTime: new Date().toISOString(),
+          ledger: ledger,
+          livePrices: livePrices,
+          gasUrl: localStorage.getItem('gasUrl') || '',
+        };
+        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `台股帳本備份_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        document.getElementById('backupStatus').textContent = `✅ 已下載備份（${Object.keys(ledger).length} 個帳本）`;
+      }
+
+      function restoreFromJSON(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const statusEl = document.getElementById('backupStatus');
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          try {
+            const backup = JSON.parse(e.target.result);
+            if (!backup.ledger) throw new Error('格式錯誤：找不到 ledger 欄位');
+            if (!confirm(`確定要還原？這會覆蓋目前的帳本資料（共 ${Object.keys(backup.ledger).length} 個帳本）。`)) return;
+
+            ledger = backup.ledger;
+            saveLedgerToLocal();
+
+            if (backup.livePrices && Object.keys(backup.livePrices).length > 0) {
+              Object.assign(livePrices, backup.livePrices);
+              savePricesToLocal();
+            }
+
+            if (backup.gasUrl) {
+              localStorage.setItem('gasUrl', backup.gasUrl);
+              document.getElementById('gasUrl').value = backup.gasUrl;
+            }
+
+            renderLedger();
+            populateLedgerSelectors();
+            statusEl.style.color = 'var(--green)';
+            statusEl.textContent = `✅ 還原成功（${Object.keys(ledger).length} 個帳本，備份時間：${backup.exportTime?.slice(0,10) || '未知'}）`;
+            showToast('帳本還原成功', 'ok');
+          } catch(err) {
+            statusEl.style.color = 'var(--red)';
+            statusEl.textContent = `❌ 還原失敗：${err.message}`;
+            showToast('還原失敗：' + err.message, 'fail');
+          }
+          event.target.value = '';
+        };
+        reader.readAsText(file);
       }
 
       function clearCache() {
@@ -3957,7 +4056,8 @@
           const totalRecords = group.reduce((a, s) => a + s.records.length, 0);
           return { label, count: group.length, totalRecords,
                    totalInvested, totalCurVal, totalPnl, totalPct,
-                   winCount, winRate, avgPct, maxWin, maxLoss };
+                   winCount, winRate, avgPct, maxWin, maxLoss,
+                   inLedgerCount: group.length };
         }
 
         const topStat = summarize(topGroup, `前${topN}名`);
@@ -4000,7 +4100,7 @@
               <div class="sub">總損益：${sign(stat.totalPnl)}<b>${fmt(stat.totalPnl)}</b> 元</div>
               <div class="sub">總投入：${fmt(stat.totalInvested)} 元</div>
               <div class="sub">勝率：<span class="${winCls}">${stat.winRate.toFixed(1)}%</span>（${stat.count} 支）</div>
-              <div class="sub" style="color:var(--text3);font-size:10px;">帳本有紀錄：${stat.inLedgerCount} 支；其餘為模擬</div>
+              <div class="sub" style="color:var(--text3);font-size:10px;">帳本有紀錄：${stat.count} 支 · 共 ${stat.totalRecords} 筆</div>
             </div>`;
         };
 
