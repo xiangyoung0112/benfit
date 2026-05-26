@@ -486,6 +486,7 @@
           <button class="btn ghost" onclick="loadLedgerFromGAS()">☁️ 從GAS載入</button>
           <button class="btn ghost" onclick="loadPricesFromGAS()">📡 從GAS同步現價</button>
           <button class="btn ghost" onclick="openAddLedgerModal()">📅 新增帳本</button>
+          <button class="btn" style="background:var(--gold-dim);border:1px solid rgba(200,125,26,0.4);color:var(--gold);" onclick="openBackfillModal()">⏪ 補登過去日期</button>
           <button class="btn ghost" onclick="openAddManual()">＋ 手動新增</button>
 
           <!-- 快速現價查詢欄（加在帳本 toolbar 最後） -->
@@ -535,6 +536,34 @@
           <input type="date" id="backtestEnd" title="結束日期">
           <button class="btn ghost" onclick="fetchAllLedgerPrices()">⚡ 全帳本更新現價</button>
           <button class="btn" onclick="runBacktest()">📊 執行區間回測</button>
+          <!-- ▼ 貝氏評分前後X名績效對比 -->
+          <div style="display:flex;align-items:center;gap:8px;width:100%;margin-top:8px;flex-wrap:wrap;
+                      border-top:1px solid var(--border);padding-top:10px;">
+            <label style="font-size:12px;color:var(--text2);white-space:nowrap;">🏆 貝氏前後對比</label>
+            <select id="topBotLedgerSelect" onchange="updateTopBotCategorySelect()"
+              style="background:var(--surface2);border:1px solid var(--border);color:var(--text);
+                     font-family:inherit;font-size:12px;padding:6px 10px;border-radius:var(--r);outline:none;">
+              <option value="all">全部帳本合併</option>
+            </select>
+            <select id="topBotCategorySelect"
+              style="background:var(--surface2);border:1px solid var(--border);color:var(--text);
+                     font-family:inherit;font-size:12px;padding:6px 10px;border-radius:var(--r);outline:none;">
+              <option value="all">全部分類</option>
+            </select>
+            <label style="font-size:12px;color:var(--text3);">前</label>
+            <input type="number" id="topNInput" value="20" min="1" max="200"
+              style="width:60px;background:var(--surface2);border:1px solid var(--border);
+                     color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;
+                     padding:6px 8px;border-radius:var(--r);outline:none;text-align:center;">
+            <label style="font-size:12px;color:var(--text3);">名 vs 後</label>
+            <input type="number" id="botNInput" value="20" min="1" max="200"
+              style="width:60px;background:var(--surface2);border:1px solid var(--border);
+                     color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;
+                     padding:6px 8px;border-radius:var(--r);outline:none;text-align:center;">
+            <label style="font-size:12px;color:var(--text3);">名</label>
+            <button class="btn" onclick="runTopBotComparison()">📊 執行對比</button>
+            <span style="font-size:11px;color:var(--text3);">（依帳本買入價 × 現價計算損益）</span>
+          </div>
         </div>
         <div class="charts-grid">
           <div class="chart-card"><div class="chart-title">各分類股票數量</div><div class="chart-wrap"><canvas id="catPieChart"></canvas></div></div>
@@ -553,6 +582,51 @@
             </div>
           </div>
           <div id="backtestCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:16px;"></div>
+        </div>
+        <!-- ▼ 貝氏前後X名對比結果 -->
+        <div id="topBotResult" style="display:none;margin-top:24px;">
+          <div style="font-size:14px;font-weight:600;color:var(--text2);margin-bottom:14px;" id="topBotTitle"></div>
+          <div class="cards-row" id="topBotSummaryCards" style="margin-bottom:20px;"></div>
+          <div class="charts-grid">
+            <div class="chart-card full">
+              <div class="chart-title" id="topBotChartTitle">前後名次損益率分布</div>
+              <div class="chart-wrap" style="height:300px;"><canvas id="topBotBarChart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">損益率累計分布（前N名）</div>
+              <div class="chart-wrap"><canvas id="topNDistChart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">損益率累計分布（後N名）</div>
+              <div class="chart-wrap"><canvas id="botNDistChart"></canvas></div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">🏆 前N名明細（帳本中有紀錄的）</div>
+              <div class="table-wrap" style="max-height:300px;">
+                <table id="topNDetailTable">
+                  <thead><tr>
+                    <th>排名</th><th>代號</th><th>名稱</th><th>貝氏評分</th>
+                    <th>分類</th><th>買入價</th><th>現價</th><th>損益%</th>
+                  </tr></thead>
+                  <tbody id="topNDetailBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">📉 後N名明細（帳本中有紀錄的）</div>
+              <div class="table-wrap" style="max-height:300px;">
+                <table id="botNDetailTable">
+                  <thead><tr>
+                    <th>排名</th><th>代號</th><th>名稱</th><th>貝氏評分</th>
+                    <th>分類</th><th>買入價</th><th>現價</th><th>損益%</th>
+                  </tr></thead>
+                  <tbody id="botNDetailBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -835,6 +909,38 @@
         </div>
       </div>
 
+    <!-- BACKFILL LEDGER MODAL -->
+    <div class="modal-bg" id="backfillModal">
+      <div class="modal" style="max-width:520px;">
+        <h3>⏪ 補登過去帳本</h3>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">
+          選擇要補登的日期，系統會建立該日帳本。可選擇從「績效頁目前篩選結果」批量匯入，
+          或建立空帳本後手動逐筆新增。
+        </p>
+        <div class="form-group">
+          <label class="form-label">補登日期</label>
+          <input class="form-input" id="backfillDate" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">匯入方式</label>
+          <select class="form-input" id="backfillMode">
+            <option value="empty">建立空帳本（手動新增）</option>
+            <option value="perf">從績效頁目前篩選結果匯入</option>
+            <option value="top20">匯入貝氏前20名</option>
+          </select>
+        </div>
+        <div id="backfillPreview" style="display:none;margin-bottom:12px;padding:10px;
+          background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);
+          font-size:12px;color:var(--text2);line-height:1.8;"></div>
+        <div id="backfillStatus" style="font-size:12px;color:var(--text3);margin-bottom:8px;"></div>
+        <div class="modal-actions">
+          <button class="btn ghost" onclick="document.getElementById('backfillModal').classList.remove('open')">取消</button>
+          <button class="btn ghost" onclick="previewBackfill()">🔍 預覽</button>
+          <button class="btn green" onclick="submitBackfill()">✅ 確認補登</button>
+        </div>
+      </div>
+    </div>
+
     <!-- GAS 同步結果 Modal -->
     <div class="modal-bg" id="gasSyncInfoModal">
       <div class="modal" style="max-width:420px;">
@@ -893,6 +999,9 @@
 
       let syncQueue = [];
       let syncRunning = false;
+
+      let topBotState = { topGroup: [], botGroup: [] };
+      let topBotSort = { top: { col: null, dir: -1 }, bot: { col: null, dir: -1 } };
 
       // ============================================================
       // BACKGROUND SYNC
@@ -1365,7 +1474,11 @@
         if(dates.includes(curVal) && curVal) select.value = curVal;
         else select.value = today;
       }
-      function openAddManual() { document.getElementById('addModal').classList.add('open'); }
+      function openAddManual() {
+        // 預設日期為當前選取的帳本日期（補登舊帳本時正確）
+        document.getElementById('addDate').value = currentLedgerDate || new Date().toISOString().split('T')[0];
+        document.getElementById('addModal').classList.add('open');
+      }
 
       function submitManualAdd() {
         const date = document.getElementById('addDate').value;
@@ -1400,6 +1513,116 @@
         updateSaveLedgerSelect();
         document.getElementById('addLedgerModal').classList.remove('open');
         showToast('已新增 '+nd+' 帳本','ok');
+      }
+
+      // ============================================================
+      // 補登過去日期帳本
+      // ============================================================
+      function openBackfillModal() {
+        // 預設為昨天
+        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        document.getElementById('backfillDate').value = yesterday;
+        document.getElementById('backfillMode').value = 'empty';
+        document.getElementById('backfillPreview').style.display = 'none';
+        document.getElementById('backfillStatus').textContent = '';
+        document.getElementById('backfillModal').classList.add('open');
+      }
+
+      function previewBackfill() {
+        const date = document.getElementById('backfillDate').value;
+        const mode = document.getElementById('backfillMode').value;
+        const previewEl = document.getElementById('backfillPreview');
+        const statusEl = document.getElementById('backfillStatus');
+
+        if (!date) { statusEl.textContent = '❌ 請選擇日期'; statusEl.style.color = 'var(--red)'; return; }
+
+        const today = new Date().toISOString().split('T')[0];
+        if (date > today) { statusEl.textContent = '❌ 不能選擇未來日期'; statusEl.style.color = 'var(--red)'; return; }
+
+        statusEl.textContent = '';
+
+        if (mode === 'empty') {
+          previewEl.style.display = 'block';
+          previewEl.innerHTML = `📅 將建立 <b>${date}</b> 的空帳本，建立後可用「手動新增」或從績效頁點「＋帳本」逐筆加入。`;
+          return;
+        }
+
+        let stocks = [];
+        if (mode === 'perf') {
+          stocks = getFilteredStocks();
+        } else if (mode === 'top20') {
+          stocks = [...STOCKS_RAW].sort((a, b) => b['貝氏評分'] - a['貝氏評分']).slice(0, 20);
+        }
+
+        const valid = stocks.filter(s => calcShares(s['現價']) > 0);
+        previewEl.style.display = 'block';
+        previewEl.innerHTML = `
+          📅 補登日期：<b>${date}</b><br>
+          📦 來源：<b>${mode === 'perf' ? '績效頁目前篩選' : '貝氏前20名'}</b><br>
+          ✅ 可匯入：<b>${valid.length} 檔</b>（跳過 ${stocks.length - valid.length} 檔價格過高）<br>
+          ${ledger[date] ? `⚠️ <span style="color:var(--gold);">${date} 帳本已存在（${(ledger[date]||[]).length} 筆），將「合併新增」，不覆蓋舊資料</span>` : '🆕 將建立新帳本'}
+        `;
+      }
+
+      function submitBackfill() {
+        const date = document.getElementById('backfillDate').value;
+        const mode = document.getElementById('backfillMode').value;
+        const statusEl = document.getElementById('backfillStatus');
+
+        if (!date) { statusEl.textContent = '❌ 請選擇日期'; statusEl.style.color = 'var(--red)'; return; }
+
+        const today = new Date().toISOString().split('T')[0];
+        if (date > today) { statusEl.textContent = '❌ 不能選擇未來日期'; statusEl.style.color = 'var(--red)'; return; }
+
+        // 確保帳本存在
+        if (!ledger[date]) ledger[date] = [];
+
+        if (mode === 'empty') {
+          currentLedgerDate = date;
+          renderLedgerTabs();
+          updateSaveLedgerSelect();
+          document.getElementById('backfillModal').classList.remove('open');
+          showPage('ledger', document.querySelector('.nav-btn:nth-child(2)'));
+          showToast(`✅ 已建立 ${date} 帳本，請手動新增股票`, 'ok');
+          if (gasUrl) enqueuSync(() => pushLedgerToGAS(), `同步 ${date} 帳本...`);
+          return;
+        }
+
+        let stocks = [];
+        if (mode === 'perf') {
+          stocks = getFilteredStocks();
+        } else if (mode === 'top20') {
+          stocks = [...STOCKS_RAW].sort((a, b) => b['貝氏評分'] - a['貝氏評分']).slice(0, 20);
+        }
+
+        let added = 0, skipped = 0;
+        stocks.forEach(s => {
+          const shares = calcShares(s['現價']);
+          if (shares <= 0) { skipped++; return; }
+          // 同一天同一支股票不重複加
+          if (ledger[date].find(r => r.code === s['代號'] && r.date === date)) { skipped++; return; }
+          ledger[date].push({
+            date,
+            code: s['代號'],
+            name: s['名稱'],
+            cat: s['分類'],
+            buyPrice: livePrices[s['代號']] || s['現價'],
+            shares,
+            score: s['貝氏評分']
+          });
+          added++;
+        });
+
+        currentLedgerDate = date;
+        renderLedgerTabs();
+        updateSaveLedgerSelect();
+        renderLedger();
+        document.getElementById('backfillModal').classList.remove('open');
+
+        // 切換到帳本頁
+        showPage('ledger', document.querySelector('.nav-btn:nth-child(2)'));
+        showToast(`✅ 已補登 ${date}：新增 ${added} 檔（跳過 ${skipped}）`, 'ok');
+        if (gasUrl) enqueuSync(() => pushLedgerToGAS(), `同步 ${date} 帳本...`);
       }
 
       function openManualPriceModal() {
@@ -2843,8 +3066,46 @@
         document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
         document.getElementById('page-'+id).classList.add('active');
         if(btn) btn.classList.add('active');
-        if(id==='chart') setTimeout(renderCharts,60);
+        if(id==='chart') {
+          setTimeout(renderCharts, 60);
+          updateTopBotLedgerSelect();
+        }
         if(id==='ledger') renderLedger();
+      }
+
+      function updateTopBotLedgerSelect() {
+        const sel = document.getElementById('topBotLedgerSelect');
+        if (!sel) return;
+        const curVal = sel.value;
+        const dates = Object.keys(ledger).sort().reverse();
+        sel.innerHTML = '<option value="all">全部帳本合併</option>' +
+          dates.map(d => `<option value="${d}">${formatDateLabel(d)}（${(ledger[d]||[]).length}筆）</option>`).join('');
+        if (curVal && (curVal === 'all' || ledger[curVal])) sel.value = curVal;
+        updateTopBotCategorySelect();
+      }
+
+      function updateTopBotCategorySelect() {
+        const ledgerSel = document.getElementById('topBotLedgerSelect');
+        const catSel = document.getElementById('topBotCategorySelect');
+        if (!ledgerSel || !catSel) return;
+
+        const selectedLedger = ledgerSel.value;
+        let allRecords = [];
+
+        if (selectedLedger === 'all') {
+          Object.entries(ledger).forEach(([ldate, stocks]) => {
+            allRecords.push(...stocks);
+          });
+        } else {
+          allRecords = ledger[selectedLedger] || [];
+        }
+
+        // 推取所有不重複的分類
+        const categories = [...new Set(allRecords.map(r => r.cat).filter(c => c))];
+        const curCat = catSel.value;
+        catSel.innerHTML = '<option value="all">全部分類</option>' +
+          categories.sort().map(c => `<option value="${c}">${c}</option>`).join('');
+        if (curCat && (curCat === 'all' || categories.includes(curCat))) catSel.value = curCat;
       }
 
       // ============================================================
@@ -3581,6 +3842,377 @@
           renderPerf(); renderLedger();
         }
         showScanResultModal(updated, stillFailed.length, stillFailed);
+      }
+
+      // ============================================================
+      // 貝氏評分前X名 vs 後X名 績效對比（支持選擇特定帳本）
+      // ============================================================
+      function runTopBotComparison() {
+        const topN = parseInt(document.getElementById('topNInput').value) || 20;
+        const botN = parseInt(document.getElementById('botNInput').value) || 20;
+        if (topN < 1 || botN < 1) { showToast('請輸入有效的數字', 'fail'); return; }
+
+        // 1. 判斷來源帳本
+        const selectedLedger = document.getElementById('topBotLedgerSelect')?.value || 'all';
+        const selectedCategory = document.getElementById('topBotCategorySelect')?.value || 'all';
+
+        let allLedger = [];
+        if (selectedLedger === 'all') {
+          Object.entries(ledger).forEach(([ldate, stocks]) => {
+            stocks.forEach(r => allLedger.push({ ...r, _ledgerDate: ldate }));
+          });
+        } else {
+          (ledger[selectedLedger] || []).forEach(r => {
+            allLedger.push({ ...r, _ledgerDate: selectedLedger });
+          });
+        }
+
+        if (allLedger.length === 0) {
+          showToast(selectedLedger === 'all'
+            ? '帳本無任何交易記錄，請先從GAS載入帳本'
+            : `${selectedLedger} 帳本是空的`, 'fail');
+          return;
+        }
+
+        // 2. 按的戆類過篶（如果有選擇）
+        if (selectedCategory !== 'all') {
+          allLedger = allLedger.filter(r => r.cat === selectedCategory);
+        }
+
+        if (allLedger.length === 0) {
+          showToast(`此帳本下無此分類的記錄`, 'fail');
+          return;
+        }
+
+        // 3. 補齊現價與損益，score 直接取帳本欄位
+        const enriched = allLedger.map(r => {
+          const score     = parseFloat(r.score) || 0;
+          const livePrice = livePrices[r.code] || r.buyPrice;
+          const invested  = r.buyPrice * r.shares;
+          const curVal    = livePrice  * r.shares;
+          const pnl       = curVal - invested;
+          const pct       = invested > 0 ? pnl / invested * 100 : 0;
+          return { ...r, score, livePrice, invested, curVal, pnl, pct };
+        });
+
+        const withScore    = enriched.filter(r => r.score > 0);
+        const withoutScore = enriched.filter(r => r.score === 0);
+
+        if (withScore.length === 0) {
+          showToast(`此帳本 ${enriched.length} 筆記錄均無貝氏評分`, 'fail');
+          return;
+        }
+        if (withoutScore.length > 0) {
+          console.warn(`[前後對比] ${withoutScore.length} 筆無評分已排除`);
+        }
+
+        // 4. 依代號合併（同一支股票若在同帳本出現多筆則合併）
+        const byCode = {};
+        withScore.forEach(r => {
+          if (!byCode[r.code]) {
+            byCode[r.code] = {
+              code: r.code, name: r.name, score: r.score,
+              cat: r.cat, totalInvested: 0, totalCurVal: 0,
+              totalPnl: 0, records: [], wins: 0
+            };
+          }
+          byCode[r.code].totalInvested += r.invested;
+          byCode[r.code].totalCurVal  += r.curVal;
+          byCode[r.code].totalPnl     += r.pnl;
+          byCode[r.code].records.push(r);
+          if (r.pnl > 0) byCode[r.code].wins++;
+        });
+
+        Object.values(byCode).forEach(s => {
+          s.pct     = s.totalInvested > 0 ? s.totalPnl / s.totalInvested * 100 : 0;
+          s.winRate = s.records.length  > 0 ? s.wins / s.records.length * 100 : 0;
+        });
+
+        // 5. 在此帳本内依貝氏評分排序，切出前N / 後N
+        const sortedByScore = Object.values(byCode).sort((a, b) => b.score - a.score);
+
+        if (sortedByScore.length < 2) {
+          showToast(`此帳本仅有 ${sortedByScore.length} 支股票，無法對比`, 'fail');
+          return;
+        }
+
+        const topGroup = sortedByScore.slice(0, Math.min(topN, sortedByScore.length))
+          .map((s, i) => ({ ...s, _rankStr: `#${i+1}` }));
+        const botGroup = sortedByScore.slice(Math.max(sortedByScore.length - botN, 0))
+          .map((s, i, arr) => ({ ...s, _rankStr: `末${arr.length - i}` }));
+
+        // 6. 彙總統計
+        function summarize(group, label) {
+          const totalInvested = group.reduce((a, s) => a + s.totalInvested, 0);
+          const totalCurVal   = group.reduce((a, s) => a + s.totalCurVal,   0);
+          const totalPnl      = totalCurVal - totalInvested;
+          const totalPct      = totalInvested > 0 ? totalPnl / totalInvested * 100 : 0;
+          const winCount      = group.filter(s => s.totalPnl > 0).length;
+          const winRate       = group.length > 0 ? winCount / group.length * 100 : 0;
+          const avgPct        = group.length > 0
+            ? group.reduce((a, s) => a + s.pct, 0) / group.length : 0;
+          const maxWin  = group.reduce((b, s) => s.pct > b.pct  ? s : b, group[0] || {});
+          const maxLoss = group.reduce((b, s) => s.pct < b.pct  ? s : b, group[0] || {});
+          const totalRecords = group.reduce((a, s) => a + s.records.length, 0);
+          return { label, count: group.length, totalRecords,
+                   totalInvested, totalCurVal, totalPnl, totalPct,
+                   winCount, winRate, avgPct, maxWin, maxLoss };
+        }
+
+        const topStat = summarize(topGroup, `前${topN}名`);
+        const botStat = summarize(botGroup, `後${botN}名`);
+
+        topBotState.topGroup = topGroup;
+        topBotState.botGroup = botGroup;
+
+        renderTopBotSummaryCards(topStat, botStat);
+        renderTopBotChart(topGroup, botGroup, topN, botN);
+        renderTopBotDistChart(topGroup, botGroup);
+        renderTopBotDetailTable(topGroup, botGroup);
+
+        const ledgerLabel = selectedLedger === 'all'
+          ? '全部帳本'
+          : `${selectedLedger} 帳本`;
+        const catLabel = selectedCategory === 'all' ? '' : `[${selectedCategory}] `;
+
+        document.getElementById('topBotResult').style.display = 'block';
+        document.getElementById('topBotTitle').textContent =
+          `📊 ${ledgerLabel} ${catLabel}· 貝氏前 ${topN} 名 vs 後 ${botN} 名 ｜ 共 ${sortedByScore.length} 支 · ${withScore.length} 筆有評分`;
+
+        document.getElementById('topBotResult').scrollIntoView({ behavior: 'smooth' });
+        showToast(`對比完成（${ledgerLabel}${catLabel}）：${sortedByScore.length} 支股票`, 'ok');
+      }
+
+      function renderTopBotSummaryCards(topStat, botStat) {
+        const fmt  = n => Math.round(n).toLocaleString('zh-TW');
+        const sign = n => n >= 0 ? '+' : '';
+
+        const makeCard = (stat, isTop) => {
+          const borderColor = isTop ? 'var(--green)' : 'var(--red)';
+          const pnlCls = stat.totalPct >= 0 ? 'pos' : 'neg';
+          const winCls = stat.winRate >= 50 ? 'pos' : 'neg';
+          return `
+            <div class="stat-card" style="border-top:3px solid ${borderColor};">
+              <div class="label" style="font-size:13px;font-weight:600;color:var(--text);">${isTop ? '🏆' : '📉'} ${stat.label}</div>
+              <div class="value ${pnlCls}" style="font-size:24px;">${sign(stat.totalPct)}${stat.totalPct.toFixed(2)}%</div>
+              <div class="sub">平均損益率：${sign(stat.avgPct)}${stat.avgPct.toFixed(2)}%</div>
+              <div class="sub">總損益：${sign(stat.totalPnl)}<b>${fmt(stat.totalPnl)}</b> 元</div>
+              <div class="sub">總投入：${fmt(stat.totalInvested)} 元</div>
+              <div class="sub">勝率：<span class="${winCls}">${stat.winRate.toFixed(1)}%</span>（${stat.count} 支）</div>
+              <div class="sub" style="color:var(--text3);font-size:10px;">帳本有紀錄：${stat.inLedgerCount} 支；其餘為模擬</div>
+            </div>`;
+        };
+
+        // 差異卡
+        const diffPct  = topStat.totalPct - botStat.totalPct;
+        const diffCls  = diffPct >= 0 ? 'pos' : 'neg';
+        const diffCard = `
+          <div class="stat-card" style="border-top:3px solid var(--gold);">
+            <div class="label" style="font-size:13px;font-weight:600;color:var(--text);">⚡ 前後差距</div>
+            <div class="value ${diffCls}" style="font-size:24px;">${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(2)}%</div>
+            <div class="sub">整體損益率差</div>
+            <div class="sub" style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:var(--r);border:1px solid var(--border);font-size:11px;color:var(--text2);line-height:1.8;">
+              ${diffPct > 3
+                ? '✅ 前N名顯著優於後N名，<br>貝氏評分有一定參考價值。'
+                : diffPct > 0
+                ? '🟡 前N名略優於後N名，<br>差距不顯著，可繼續觀察。'
+                : diffPct > -3
+                ? '🟠 前後差距不大，<br>評分參考價值有限。'
+                : '❌ 後N名反而優於前N名，<br>建議重新檢視評分邏輯。'}
+            </div>
+          </div>`;
+
+        document.getElementById('topBotSummaryCards').innerHTML =
+          makeCard(topStat, true) + makeCard(botStat, false) + diffCard;
+      }
+
+      function renderTopBotChart(topResults, botResults, topN, botN) {
+        if(appCharts['topBotBarChart']) {
+          appCharts['topBotBarChart'].destroy();
+          delete appCharts['topBotBarChart'];
+        }
+
+        // 每支股票的損益率（前N名綠色，後N名紅色）
+        const allLabels = [
+          ...topResults.map((r,i) => `前#${i+1} ${r.name}`),
+          ...botResults.map((r,i) => `後#${i+1} ${r.name}`)
+        ];
+        const allData = [
+          ...topResults.map(r => parseFloat(r.pct.toFixed(2))),
+          ...botResults.map(r => parseFloat(r.pct.toFixed(2)))
+        ];
+        const allColors = [
+          ...topResults.map(r => r.pct >= 0 ? 'rgba(26,158,92,0.75)' : 'rgba(26,158,92,0.35)'),
+          ...botResults.map(r => r.pct >= 0 ? 'rgba(217,64,64,0.45)' : 'rgba(217,64,64,0.75)')
+        ];
+
+        // 超過30支時縮短標籤
+        const labels = allLabels.length > 30
+          ? allLabels.map((l, i) => i < topN ? `前#${i+1}` : `後#${i-topN+1}`)
+          : allLabels;
+
+        document.getElementById('topBotChartTitle').textContent =
+          `前${topN}名（綠）vs 後${botN}名（紅）各支損益率`;
+
+        const ctx = document.getElementById('topBotBarChart').getContext('2d');
+        appCharts['topBotBarChart'] = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{
+              label: '損益率(%)',
+              data: allData,
+              backgroundColor: allColors,
+              borderRadius: 4,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  title: items => allLabels[items[0].dataIndex] || '',
+                  label: ctx => {
+                    const s = [...topBotState.topGroup, ...topBotState.botGroup][ctx.dataIndex];
+                    return [
+                      ` 損益率：${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y.toFixed(2)}%`,
+                      ` 貝氏評分：${s.score.toFixed(2)}`,
+                      ` 帳本筆數：${s.records.length} 筆`,
+                      ` 勝率：${s.winRate.toFixed(1)}%`
+                    ];
+                  }
+                }
+              },
+              annotation: {
+                annotations: {
+                  separator: {
+                    type: 'line',
+                  xMin: topBotState.topGroup.length - 0.5,
+                  xMax: topBotState.topGroup.length - 0.5,
+                    borderColor: 'rgba(200,125,26,0.6)',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                ticks: { color: '#7a5a3e', font: { size: 9 }, maxRotation: 45 },
+                grid: { color: 'rgba(180,100,40,0.08)' }
+              },
+              y: {
+                ticks: { color: '#7a5a3e', callback: v => v + '%' },
+                grid: { color: 'rgba(180,100,40,0.08)' }
+              }
+            }
+          }
+        });
+      }
+      
+      // ── 損益率分布圖 ─────────────────────────────────────────────
+      function renderTopBotDistChart(topGroup, botGroup) {
+        ['topNDistChart', 'botNDistChart'].forEach(id => {
+          if(appCharts[id]) { appCharts[id].destroy(); delete appCharts[id]; }
+        });
+      
+        function makeDistChart(canvasId, group) {
+          const bins   = [-30, -20, -10, -5, -2, 0, 2, 5, 10, 20, 30, Infinity];
+          const bLabels= ['<-30','-20~-30','-10~-20','-5~-10','-2~-5','-2~0','0~2','2~5','5~10','10~20','20~30','>30'];
+          const counts = new Array(bins.length).fill(0);
+          group.forEach(s => {
+            for(let i = 0; i < bins.length; i++) {
+              if (s.pct < bins[i]) { counts[i]++; break; }
+            }
+          });
+          const ctx = document.getElementById(canvasId).getContext('2d');
+          appCharts[canvasId] = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: bLabels,
+              datasets: [{
+                data: counts,
+                backgroundColor: bLabels.map((_, i) => i < 5
+                  ? 'rgba(217,64,64,0.7)' : 'rgba(26,158,92,0.7)'),
+                borderRadius: 4,
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { ticks: { color: '#7a5a3e', font: { size: 9 }, maxRotation: 60 }, grid: { color: 'rgba(180,100,40,0.08)' } },
+                y: { ticks: { color: '#7a5a3e', stepSize: 1 }, grid: { color: 'rgba(180,100,40,0.08)' } }
+              }
+            }
+          });
+        }
+        makeDistChart('topNDistChart', topGroup);
+        makeDistChart('botNDistChart', botGroup);
+      }
+      
+      // ── 明細表格 ─────────────────────────────────────────────────
+      function renderTopBotDetailTable(topGroup, botGroup) {
+        const makeRows = (group) => group.map((s, i) => {
+          const pnlCls = s.pct >= 0 ? 'pos' : 'neg';
+          const catTag = String(s.cat).split(',').map(c => {
+            const cc = CAT_COLORS[c] || '#888';
+            return `<span class="cat-tag" style="background:${cc}22;color:${cc}">${CAT_LABELS[c] || c}</span>`;
+          }).join(' ');
+          const winCls = s.winRate >= 50 ? 'pos' : 'neg';
+          return `<tr>
+            <td class="code">${s._rankStr || '--'}</td>
+            <td class="code">${s.code}</td>
+            <td class="name">${s.name}</td>
+            <td style="color:var(--gold);font-family:'JetBrains Mono',monospace;">${s.score.toFixed(2)}</td>
+            <td>${catTag}</td>
+            <td class="price-cell">${(s.totalInvested / s.records.reduce((a,r) => a+r.shares,0) || 0).toFixed(2)}</td>
+            <td class="price-cell">${(s.records[0]?.livePrice || 0).toFixed(2)}</td>
+            <td class="pct-cell ${pnlCls}">${s.pct >= 0 ? '+' : ''}${s.pct.toFixed(2)}%</td>
+            <td class="pnl-cell ${pnlCls}">${s.totalPnl >= 0 ? '+' : ''}${Math.round(s.totalPnl).toLocaleString()}</td>
+            <td class="pct-cell ${winCls}">${s.winRate.toFixed(0)}%</td>
+            <td class="code" style="color:var(--text3);">${s.records.length}</td>
+          </tr>`;
+        }).join('');
+      
+        const getSortIcon = (g, c) => topBotSort[g].col === c ? (topBotSort[g].dir > 0 ? '↑' : '↓') : '↕';
+      
+        const makeThead = (g) => `<tr>
+          <th>排名</th><th>代號</th><th>名稱</th><th>貝氏評分</th>
+          <th>分類</th><th>平均買入價</th><th>現價</th>
+          <th onclick="sortTopBotDetail('${g}','pct')" style="cursor:pointer;" title="點擊排序">損益% ${getSortIcon(g, 'pct')}</th>
+          <th onclick="sortTopBotDetail('${g}','pnl')" style="cursor:pointer;" title="點擊排序">損益額 ${getSortIcon(g, 'pnl')}</th>
+          <th>勝率</th><th>帳本筆數</th>
+        </tr>`;
+
+        document.getElementById('topNDetailTable').querySelector('thead').innerHTML = makeThead('top');
+        document.getElementById('botNDetailTable').querySelector('thead').innerHTML = makeThead('bot');
+        document.getElementById('topNDetailBody').innerHTML = makeRows(topGroup);
+        document.getElementById('botNDetailBody').innerHTML = makeRows(botGroup);
+      }
+
+      function sortTopBotDetail(groupName, col) {
+        if (topBotSort[groupName].col === col) {
+          topBotSort[groupName].dir *= -1;
+        } else {
+          topBotSort[groupName].col = col;
+          topBotSort[groupName].dir = -1;
+        }
+  
+        const group = topBotState[groupName + 'Group'];
+        const dir = topBotSort[groupName].dir;
+  
+        group.sort((a, b) => {
+          let valA, valB;
+          if (col === 'pct') { valA = a.pct; valB = b.pct; }
+          else if (col === 'pnl') { valA = a.totalPnl; valB = b.totalPnl; }
+          return dir * (valA > valB ? 1 : valA < valB ? -1 : 0);
+        });
+  
+        renderTopBotDetailTable(topBotState.topGroup, topBotState.botGroup);
       }
       </script>
       </body>
