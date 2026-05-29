@@ -96,7 +96,7 @@
       .pct-cell{font-family:'JetBrains Mono',monospace;font-size:12px;}
 
       /* Ledger tabs */
-      .ledger-tabs{display:flex;gap:0;border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;margin-bottom:16px;flex-wrap:wrap;}
+      .ledger-tabs{display:flex;gap:0;border:1px solid var(--border);border-radius:var(--r2);overflow:visible;margin-bottom:16px;flex-wrap:wrap;}
       .ledger-tab-btn{background:var(--surface);border:none;border-right:1px solid var(--border);color:var(--text2);font-family:inherit;font-size:12px;padding:8px 16px;cursor:pointer;transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:6px;}
       .ledger-tab-btn:last-child{border-right:none;}
       .ledger-tab-btn:hover{background:var(--surface2);color:var(--text);}
@@ -355,6 +355,27 @@
         .cards-row{grid-template-columns:1fr;}/* 只剩單欄 */
         .nav-btn{font-size:11px;padding:6px 2px;}
         table{min-width:520px;}
+      }
+
+      /* Ledger tab 月份群組折疊 */
+      .ledger-month-group { position:relative; display:inline-block; }
+      .ledger-month-trigger {
+        background:var(--surface); border:1px solid var(--border2);
+        color:var(--text2); font-family:inherit; font-size:12px;
+        padding:8px 14px; cursor:pointer; transition:all .2s;
+        white-space:nowrap; border-radius:0; display:flex; align-items:center; gap:5px;
+      }
+      .ledger-month-trigger:hover { background:var(--surface2); color:var(--text); }
+      .ledger-month-trigger.has-active { background:var(--blue-dim); color:var(--accent); font-weight:600; }
+      .ledger-month-dropdown {
+        position:absolute; top:calc(100% + 2px); left:0; z-index:60;
+        background:var(--surface); border:1px solid var(--border2);
+        border-radius:var(--r); padding:4px; min-width:140px;
+        box-shadow:0 8px 24px rgba(160,80,20,0.18); display:none; flex-direction:column; gap:2px;
+      }
+      .ledger-month-group.open .ledger-month-dropdown { display:flex; }
+      .ledger-month-dropdown .ledger-tab-btn {
+        border-right:none; border-radius:6px; font-size:12px; width:100%;
       }
       </style>
       </head>
@@ -1138,19 +1159,87 @@
         if(dates.length === 0) { ensureTodayLedger(); return renderLedgerTabs(); }
         if(!currentLedgerDate || !ledger[currentLedgerDate]) currentLedgerDate = dates[0];
 
-        document.getElementById('ledgerTabs').innerHTML = dates.map(d => {
+        // 依年月分組
+        const groups = {};
+        dates.forEach(d => {
+          const ym = d.slice(0, 7); // "2025-03"
+          if(!groups[ym]) groups[ym] = [];
+          groups[ym].push(d);
+        });
+        const sortedYM = Object.keys(groups).sort().reverse();
+
+        // 最近N筆直接顯示為 tab，其餘收進月份群組選單
+        const RECENT_SHOW = 3;
+        const recentDates = dates.slice(0, RECENT_SHOW);
+
+        // 建立 tab HTML
+        let tabHtml = '';
+
+        // 最近幾筆直接顯示
+        recentDates.forEach(d => {
           const count = (ledger[d]||[]).length;
-          const label = formatDateLabel(d);
-          return `<button class="ledger-tab-btn ${d===currentLedgerDate?'active':''}" onclick="switchLedger('${d}')">
+          const label = formatDateLabelShort(d);
+          tabHtml += `<button class="ledger-tab-btn ${d===currentLedgerDate?'active':''}" onclick="switchLedger('${d}')">
             ${label} <span class="tab-count">${count}</span>
           </button>`;
-        }).join('');
+        });
 
-        // 更新下拉菜單
+        // 剩下的依年月分組成下拉
+        const olderDates = dates.slice(RECENT_SHOW);
+        if(olderDates.length > 0) {
+          // 找出哪些年月有 active
+          const activeYM = currentLedgerDate && !recentDates.includes(currentLedgerDate)
+            ? currentLedgerDate.slice(0,7) : null;
+
+          // 依年月分群
+          const olderGroups = {};
+          olderDates.forEach(d => {
+            const ym = d.slice(0,7);
+            if(!olderGroups[ym]) olderGroups[ym] = [];
+            olderGroups[ym].push(d);
+          });
+          const sortedOlderYM = Object.keys(olderGroups).sort().reverse();
+
+          sortedOlderYM.forEach(ym => {
+            const [y, m] = ym.split('-');
+            const ymLabel = `${y}年${parseInt(m)}月`;
+            const hasActive = olderGroups[ym].includes(currentLedgerDate);
+            const groupId = 'lmg-' + ym;
+            const items = olderGroups[ym].map(d => {
+              const count = (ledger[d]||[]).length;
+              return `<button class="ledger-tab-btn ${d===currentLedgerDate?'active':''}" onclick="switchLedger('${d}');closeLedgerMonthGroups()">
+                ${formatDateLabelShort(d)} <span class="tab-count">${count}</span>
+              </button>`;
+            }).join('');
+
+            tabHtml += `<div class="ledger-month-group ${hasActive?'open':''}" id="${groupId}">
+              <button class="ledger-month-trigger ${hasActive?'has-active':''}" onclick="toggleLedgerMonthGroup('${groupId}')">
+                📅 ${ymLabel} <span class="tab-count" style="background:var(--border2);padding:1px 5px;border-radius:8px;font-size:10px;">${olderGroups[ym].length}</span> ▾
+              </button>
+              <div class="ledger-month-dropdown">${items}</div>
+            </div>`;
+          });
+        }
+
+        document.getElementById('ledgerTabs').innerHTML = tabHtml;
+
+        // 更新下拉菜單（ledgerSelector 保持完整列表）
         const sel = document.getElementById('ledgerSelector');
         if(sel) {
-          sel.innerHTML = '<option value="">-- 選擇帳務本 --' + 
-            dates.map(d => `<option value="${d}" ${d===currentLedgerDate?'selected':''}>${formatDateLabel(d)}</option>`).join('');
+          // 依年份分 optgroup
+          const yearGroups = {};
+          dates.forEach(d => {
+            const y = d.slice(0,4);
+            if(!yearGroups[y]) yearGroups[y] = [];
+            yearGroups[y].push(d);
+          });
+          const sortedYears = Object.keys(yearGroups).sort().reverse();
+          sel.innerHTML = '<option value="">-- 選擇帳務本 --</option>' +
+            sortedYears.map(y =>
+              `<optgroup label="${y}年">${
+                yearGroups[y].map(d => `<option value="${d}" ${d===currentLedgerDate?'selected':''}>${formatDateLabel(d)}</option>`).join('')
+              }</optgroup>`
+            ).join('');
           sel.value = currentLedgerDate;
         }
 
@@ -1161,12 +1250,29 @@
         }
       }
 
+      function toggleLedgerMonthGroup(id) {
+        const el = document.getElementById(id);
+        if(!el) return;
+        const isOpen = el.classList.contains('open');
+        closeLedgerMonthGroups();
+        if(!isOpen) el.classList.add('open');
+      }
+
+      function closeLedgerMonthGroups() {
+        document.querySelectorAll('.ledger-month-group').forEach(g => g.classList.remove('open'));
+      }
+
       function switchLedgerBySelect() {
         const d = document.getElementById('ledgerSelector').value;
         if(d) switchLedger(d);
       }
 
       function formatDateLabel(d) {
+        const dt = new Date(d + 'T00:00:00');
+        return dt.toLocaleDateString('zh-TW', {year:'numeric',month:'2-digit',day:'2-digit'}) + ' 帳本';
+      }
+
+      function formatDateLabelShort(d) {
         const dt = new Date(d + 'T00:00:00');
         return dt.toLocaleDateString('zh-TW', {month:'2-digit',day:'2-digit'}) + ' 帳本';
       }
