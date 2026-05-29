@@ -870,6 +870,7 @@
           </div>
           <div class="modal-actions">
             <button class="btn ghost" onclick="document.getElementById('exportRangeModal').classList.remove('open')">取消</button>
+            <button class="btn" onclick="showWinRateAnalysis()">📊 勝率分析</button>
             <button class="btn green" onclick="doExportWithRange()">匯出</button>
           </div>
         </div>
@@ -2462,6 +2463,7 @@
             '代號': r.code,
             '名稱': r.name,
             '分類': String(r.cat).split(',').map(c => CAT_LABELS[c] || c).join(', '),
+            '貝氏評分': r.score ?? '',
             '買入價': r.buyPrice,
             '股數': r.shares,
             '投入金額': +invested.toFixed(0),
@@ -2524,12 +2526,162 @@
           exportCsv(detailRows, filename + '_明細');
           exportCsv(catRows, filename + '_分類');
         } else {
-          // Excel 多工作表
-          exportXlsxMultisheet({
+          // Excel 多工作表：總覽 + 分類損益 + 每個帳本各一張
+          const sheetsObj = {
             '總覽': summaryRows,
             '分類損益': catRows,
-            '明細': detailRows,
-          }, filename);
+          };
+
+          // 依帳本分組
+          const byLedger = {};
+          allRecords.forEach(r => {
+            if (!byLedger[r._ledgerKey]) byLedger[r._ledgerKey] = [];
+            byLedger[r._ledgerKey].push(r);
+          });
+
+          // 每個帳本變成一張工作表
+          Object.keys(byLedger).sort().forEach(ledgerKey => {
+            const rows = byLedger[ledgerKey].map(r => {
+              const lp = livePrices[r.code] || r.buyPrice;
+              const invested = r.shares * r.buyPrice;
+              const curVal = r.shares * lp;
+              const pnl = curVal - invested;
+              const pct = invested > 0 ? pnl / invested * 100 : 0;
+              return {
+                '交易日期': r.date,
+                '代號': r.code,
+                '名稱': r.name,
+                '分類': String(r.cat).split(',').map(c => CAT_LABELS[c] || c).join(', '),
+                '貝氏評分': r.score ?? '',
+                '買入價': r.buyPrice,
+                '股數': r.shares,
+                '投入金額': +invested.toFixed(0),
+                '現價': +parseFloat(lp).toFixed(2),
+                '市值': +curVal.toFixed(0),
+                '損益': +pnl.toFixed(0),
+                '損益%': pct.toFixed(2) + '%'
+              };
+            });
+            sheetsObj[ledgerKey] = rows;
+          });
+
+          exportXlsxMultisheet(sheetsObj, filename);
+        }
+
+        document.getElementById('exportRangeModal').classList.remove('open');
+      }
+
+      function showWinRateAnalysis() {
+        const range = getExportDateRange();
+
+        // 收集區間內所有記錄
+        const allRecords = [];
+        Object.keys(ledger).forEach(ledgerKey => {
+          (ledger[ledgerKey] || []).forEach(r => {
+            if (range && (r.date < range.from || r.date > range.to)) return;
+            allRecords.push({ ...r });
+          });
+        });
+
+        if (!allRecords.length) { showToast('所選區間無帳務資料', 'fail'); return; }
+
+        // 計算每筆的損益%
+        const withPct = allRecords.map(r => {
+          const lp = livePrices[r.code] || r.buyPrice;
+          const pct = r.buyPrice > 0 ? (lp - r.buyPrice) / r.buyPrice * 100 : 0;
+          return { ...r, pct };
+        });
+
+      // 按「日期 + 分類」分組
+        const byDateCat = {};
+        withPct.forEach(r => {
+          const cats = String(r.cat).split(',');
+          cats.forEach(cat => {
+            const catKey = cat.trim();
+            const key = `${r.date}__${catKey}`;
+            if (!byDateCat[key]) byDateCat[key] = { date: r.date, cat: catKey, records: [] };
+            byDateCat[key].records.push(r);
+          });
+        });
+
+        // 每個日期一個工作表
+        const sheetsObj = {};
+        const allDates = [...new Set(Object.values(byDateCat).map(v => v.date))].sort();
+
+        allDates.forEach(date => {
+          const rows = [];
+
+          const catsOfDay = Object.values(byDateCat)
+            .filter(v => v.date === date)
+            .sort((a, b) => a.cat.localeCompare(b.cat));
+
+          catsOfDay.forEach(({ cat, records }) => {
+            const catLabel = CAT_LABELS[cat] || cat;
+            const sorted = [...records].sort((a, b) => a.pct - b.pct);
+            const total = sorted.length;
+
+            for (let d = 1; d <= 9; d++) {
+              const from = Math.floor((d - 1) / 10 * total);
+              const to   = Math.floor(d / 10 * total);
+              const group = sorted.slice(from, to);
+              const wins  = group.filter(r => r.pct > 0).length;
+              rows.push({
+                '分類':      catLabel,
+                '分位':      `D${d}`,
+                '範圍':      `${(d-1)*10}%～${d*10}% 分位`,
+                '筆數':      group.length,
+                '獲利筆':    wins,
+                '勝率':      group.length > 0 ? (wins / group.length * 100).toFixed(1) + '%' : '-',
+                '平均損益%': group.length > 0 ? (group.reduce((a, r) => a + r.pct, 0) / group.length).toFixed(2) + '%' : '-',
+                '最大損益%': group.length > 0 ? Math.max(...group.map(r => r.pct)).toFixed(2) + '%' : '-',
+                '最小損益%': group.length > 0 ? Math.min(...group.map(r => r.pct)).toFixed(2) + '%' : '-',
+              });
+            }
+
+            rows.push({ '分類': '', '分位': '', '範圍': '', '筆數': '', '獲利筆': '', '勝率': '', '平均損益%': '', '最大損益%': '', '最小損益%': '' });
+
+            for (let q = 1; q <= 4; q++) {
+              const from = Math.floor((q - 1) / 4 * total);
+              const to   = Math.floor(q / 4 * total);
+              const group = sorted.slice(from, to);
+              const wins  = group.filter(r => r.pct > 0).length;
+              rows.push({
+                '分類':      catLabel,
+                '分位':      `Q${q}`,
+                '範圍':      `${(q-1)*25}%～${q*25}% 分位`,
+                '筆數':      group.length,
+                '獲利筆':    wins,
+                '勝率':      group.length > 0 ? (wins / group.length * 100).toFixed(1) + '%' : '-',
+                '平均損益%': group.length > 0 ? (group.reduce((a, r) => a + r.pct, 0) / group.length).toFixed(2) + '%' : '-',
+                '最大損益%': group.length > 0 ? Math.max(...group.map(r => r.pct)).toFixed(2) + '%' : '-',
+                '最小損益%': group.length > 0 ? Math.min(...group.map(r => r.pct)).toFixed(2) + '%' : '-',
+              });
+            }
+
+            // 分類之間空兩行
+            rows.push({ '分類': '', '分位': '', '範圍': '', '筆數': '', '獲利筆': '', '勝率': '', '平均損益%': '', '最大損益%': '', '最小損益%': '' });
+            rows.push({ '分類': '', '分位': '', '範圍': '', '筆數': '', '獲利筆': '', '勝率': '', '平均損益%': '', '最大損益%': '', '最小損益%': '' });
+          });
+
+          // 工作表名稱：取日期後6碼，如 2025-05-28 → 250528
+          const sheetName = date.replace(/-/g, '').slice(2);
+          sheetsObj[sheetName] = rows;
+        });
+
+        const fmt = document.getElementById('exportRangeFormat').value;
+        const label = range ? `${range.from}_${range.to}` : '全部';
+
+        if (fmt === 'csv') {
+          const flatRows = [];
+          allDates.forEach(date => {
+            const sheetName = date.replace(/-/g, '').slice(2);
+            (sheetsObj[sheetName] || []).forEach(row => {
+              if (row['分類']) flatRows.push({ '日期': date, ...row });
+            });
+          });
+          exportCsv(flatRows, `分位勝率分析_${label}`);
+        } else {
+          exportXlsxMultisheet(sheetsObj, `分位勝率分析_${label}`);
         }
 
         document.getElementById('exportRangeModal').classList.remove('open');
