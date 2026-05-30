@@ -1,4 +1,4 @@
-      <!DOCTYPE html>
+<!DOCTYPE html>
       <html lang="zh-TW">
       <head>
       <meta charset="UTF-8">
@@ -2617,12 +2617,12 @@
 
           catsOfDay.forEach(({ cat, records }) => {
             const catLabel = CAT_LABELS[cat] || cat;
-            const sorted = [...records].sort((a, b) => a.pct - b.pct);
+            const sorted = [...records].sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
             const total = sorted.length;
 
-            for (let d = 1; d <= 9; d++) {
+            for (let d = 1; d <= 10; d++) {
               const from = Math.floor((d - 1) / 10 * total);
-              const to   = Math.floor(d / 10 * total);
+              const to   = d === 10 ? total : Math.floor(d / 10 * total);
               const group = sorted.slice(from, to);
               const wins  = group.filter(r => r.pct > 0).length;
               rows.push({
@@ -2642,7 +2642,7 @@
 
             for (let q = 1; q <= 4; q++) {
               const from = Math.floor((q - 1) / 4 * total);
-              const to   = Math.floor(q / 4 * total);
+              const to   = q === 4 ? total : Math.floor(q / 4 * total);
               const group = sorted.slice(from, to);
               const wins  = group.filter(r => r.pct > 0).length;
               rows.push({
