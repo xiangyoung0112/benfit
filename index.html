@@ -958,8 +958,8 @@
 
           <div class="modal-actions">
             <button class="btn" onclick="document.getElementById('scanResultModal').classList.remove('open')">關閉</button>
+            <button class="btn green" id="retryPureBtn" onclick="document.getElementById('scanResultModal').classList.remove('open');_runBatchOrProxy(_lastFailedCodes,'重試')" style="display:none;">🔄 重試失敗（純即時價）</button>
             <button class="btn gold" id="retryFailedBtn" onclick="retryFailedCodes()" style="display:none;">🔄 重試失敗（含昨收）</button>
-            <button class="btn green" id="retryPureBtn" onclick="_runBatchOrProxy(_lastFailedCodes,'重試')" style="display:none;">🔄 重試失敗（純即時價）</button>
           </div>
         </div>
       </div>
@@ -2122,28 +2122,11 @@
 
           if(prices && Object.keys(prices).length > 0) {
             let updated = 0;
-            let failedCodes = [];
+            const failedCodes = [];
             codes.forEach(c => {
               if(prices[c] > 0) { livePrices[c] = prices[c]; updated++; }
               else failedCodes.push(c);
             });
-
-            // 自動重試一次（不含 fallback）
-            if(failedCodes.length > 0) {
-              document.getElementById('loadingText').textContent = `重試查詢 ${failedCodes.length} 檔（第2次）...`;
-              showProgress(0, failedCodes.length);
-              const retryPrices = await fetchBatchPricesViaGAS(failedCodes, (done, total) => {
-                showProgress(done, total);
-              });
-              hideProgress();
-              const stillFailed = [];
-              failedCodes.forEach(c => {
-                if(retryPrices && retryPrices[c] > 0) { livePrices[c] = retryPrices[c]; updated++; }
-                else stillFailed.push(c);
-              });
-              failedCodes = stillFailed;
-            }
-
             livePriceTimestamp = Date.now();
             savePricesToLocal();
             if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
@@ -2171,25 +2154,11 @@
         hideProgress();
         hideLoading();
 
-        let failedCodes = codes.filter(c => !prices[c]);
-
-        // 自動重試一次（不含 fallback）
-        if(failedCodes.length > 0) {
-          document.getElementById('loadingText').textContent = `重試查詢 ${failedCodes.length} 檔（第2次）...`;
-          showProgress(0, failedCodes.length * 2);
-          const retryPrices = await fetchBatchPricesViaProxy(failedCodes, (done, total, batchPrices) => {
-            Object.entries(batchPrices).forEach(([c, p]) => {
-              if(p > 0) { livePrices[c] = p; updated++; }
-            });
-            showProgress(done, total);
-          });
-          hideProgress();
-          failedCodes = failedCodes.filter(c => !retryPrices[c]);
-        }
-
         livePriceTimestamp = Date.now();
         savePricesToLocal();
         if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
+
+        const failedCodes = codes.filter(c => !prices[c]);
         showScanResultModal(updated, failedCodes.length, failedCodes);
         renderPerf(); renderLedger();
       }
@@ -4009,6 +3978,7 @@
           wrapEl.style.display = 'block';
           reasonBox.style.display = 'block';
           retryBtn.style.display = 'inline-flex';
+          document.getElementById('retryPureBtn').style.display = 'inline-flex';
           listEl.innerHTML = _lastFailedCodes.map(c => {
             const s = STOCKS_RAW.find(x => x['代號'] === c);
             const name = s ? s['名稱'] : '';
@@ -4025,6 +3995,7 @@
           wrapEl.style.display = 'none';
           reasonBox.style.display = 'none';
           retryBtn.style.display = 'none';
+          document.getElementById('retryPureBtn').style.display = 'none';
           listEl.innerHTML = '';
           singleInput.value = '';
           manualWrap.style.display = 'none';
