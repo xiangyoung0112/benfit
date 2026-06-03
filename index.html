@@ -2106,7 +2106,7 @@
       async function _runBatchOrProxy(codes, label) {
         const mode = document.getElementById('proxyMode')?.value || proxyMode;
 
-        // === GAS 批量優先（不動） ===
+        // === GAS 批量優先 ===
         if(mode === 'gas' && gasUrl) {
           showLoading(`透過 GAS 查詢 ${codes.length} 檔...`);
           showProgress(0, codes.length);
@@ -2122,11 +2122,31 @@
 
           if(prices && Object.keys(prices).length > 0) {
             let updated = 0;
-            const failedCodes = [];
+            let failedCodes = [];
             codes.forEach(c => {
               if(prices[c] > 0) { livePrices[c] = prices[c]; updated++; }
               else failedCodes.push(c);
             });
+
+            // 自動重試一次（不含 fallback）
+            if(failedCodes.length > 0) {
+              showLoading(`重試查詢 ${failedCodes.length} 檔（第2次）...`);
+              showProgress(0, failedCodes.length);
+              const retryPrices = await fetchBatchPricesViaGAS(failedCodes, (done, total) => {
+                showProgress(done, total);
+                document.getElementById('loadingText').textContent =
+                  `GAS重試中... ${done}/${total} 檔`;
+              });
+              hideProgress();
+              hideLoading();
+              const stillFailed = [];
+              failedCodes.forEach(c => {
+                if(retryPrices && retryPrices[c] > 0) { livePrices[c] = retryPrices[c]; updated++; }
+                else stillFailed.push(c);
+              });
+              failedCodes = stillFailed;
+            }
+
             livePriceTimestamp = Date.now();
             savePricesToLocal();
             if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
@@ -2138,7 +2158,7 @@
 
         // === CORS Proxy 雙輪查詢（TSE → OTC）===
         showLoading(`透過 Proxy 分批查詢 ${codes.length} 檔（TSE → OTC 兩輪）...`);
-        showProgress(0, codes.length * 2); // 雙輪，進度條分兩段
+        showProgress(0, codes.length * 2);
 
         let updated = 0;
 
@@ -2151,14 +2171,32 @@
             `Proxy查詢中（TSE→OTC）... ｜✓ ${updated}/${codes.length} 筆有即時成交價`;
         });
 
-        hideProgress();
-        hideLoading();
+        // 自動重試一次（不含 fallback）
+        let failedCodes = codes.filter(c => !prices[c]);
+        if(failedCodes.length > 0) {
+          showLoading(`重試查詢 ${failedCodes.length} 檔（第2次）...`);
+          showProgress(0, failedCodes.length * 2);
+
+          const retryPrices = await fetchBatchPricesViaProxy(failedCodes, (done, total, batchPrices) => {
+            Object.entries(batchPrices).forEach(([c, p]) => {
+              if(p > 0) { livePrices[c] = p; updated++; }
+            });
+            showProgress(done, total);
+            document.getElementById('loadingText').textContent =
+              `Proxy重試中（TSE→OTC）... ｜✓ ${updated}/${codes.length} 筆有即時成交價`;
+          });
+
+          hideProgress();
+          hideLoading();
+          failedCodes = failedCodes.filter(c => !retryPrices[c]);
+        } else {
+          hideProgress();
+          hideLoading();
+        }
 
         livePriceTimestamp = Date.now();
         savePricesToLocal();
         if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
-
-        const failedCodes = codes.filter(c => !prices[c]);
         showScanResultModal(updated, failedCodes.length, failedCodes);
         renderPerf(); renderLedger();
       }
