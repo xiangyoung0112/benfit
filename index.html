@@ -959,6 +959,7 @@
           <div class="modal-actions">
             <button class="btn" onclick="document.getElementById('scanResultModal').classList.remove('open')">關閉</button>
             <button class="btn gold" id="retryFailedBtn" onclick="retryFailedCodes()" style="display:none;">🔄 重試失敗（含昨收）</button>
+            <button class="btn green" id="retryPureBtn" onclick="_runBatchOrProxy(_lastFailedCodes,'重試')" style="display:none;">🔄 重試失敗（純即時價）</button>
           </div>
         </div>
       </div>
