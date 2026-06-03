@@ -2121,11 +2121,28 @@
 
           if(prices && Object.keys(prices).length > 0) {
             let updated = 0;
-            const failedCodes = [];
+            let failedCodes = [];
             codes.forEach(c => {
               if(prices[c] > 0) { livePrices[c] = prices[c]; updated++; }
               else failedCodes.push(c);
             });
+
+            // 自動重試一次（不含 fallback）
+            if(failedCodes.length > 0) {
+              document.getElementById('loadingText').textContent = `重試查詢 ${failedCodes.length} 檔（第2次）...`;
+              showProgress(0, failedCodes.length);
+              const retryPrices = await fetchBatchPricesViaGAS(failedCodes, (done, total) => {
+                showProgress(done, total);
+              });
+              hideProgress();
+              const stillFailed = [];
+              failedCodes.forEach(c => {
+                if(retryPrices && retryPrices[c] > 0) { livePrices[c] = retryPrices[c]; updated++; }
+                else stillFailed.push(c);
+              });
+              failedCodes = stillFailed;
+            }
+
             livePriceTimestamp = Date.now();
             savePricesToLocal();
             if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
@@ -2153,11 +2170,25 @@
         hideProgress();
         hideLoading();
 
+        let failedCodes = codes.filter(c => !prices[c]);
+
+        // 自動重試一次（不含 fallback）
+        if(failedCodes.length > 0) {
+          document.getElementById('loadingText').textContent = `重試查詢 ${failedCodes.length} 檔（第2次）...`;
+          showProgress(0, failedCodes.length * 2);
+          const retryPrices = await fetchBatchPricesViaProxy(failedCodes, (done, total, batchPrices) => {
+            Object.entries(batchPrices).forEach(([c, p]) => {
+              if(p > 0) { livePrices[c] = p; updated++; }
+            });
+            showProgress(done, total);
+          });
+          hideProgress();
+          failedCodes = failedCodes.filter(c => !retryPrices[c]);
+        }
+
         livePriceTimestamp = Date.now();
         savePricesToLocal();
         if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
-
-        const failedCodes = codes.filter(c => !prices[c]);
         showScanResultModal(updated, failedCodes.length, failedCodes);
         renderPerf(); renderLedger();
       }
