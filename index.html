@@ -1470,6 +1470,53 @@
         return null;
       }
 
+      const LEDGER_LOCAL_KEY = 'ledger_cache';
+
+      function isTodayPriceCache() {
+        if(!livePriceTimestamp) return false;
+        const todayStr = new Date().toISOString().split('T')[0];
+        return new Date(livePriceTimestamp).toISOString().split('T')[0] === todayStr;
+      }
+
+      function getEffectivePrice(record) {
+        const rawPrice = livePrices[record.code];
+        const hasLivePrice = rawPrice !== undefined && rawPrice !== null && Number(rawPrice) > 0;
+        const useLivePrice = hasLivePrice && isTodayPriceCache();
+        return {
+          price: useLivePrice ? Number(rawPrice) : Number(record.buyPrice || 0),
+          isLive: useLivePrice,
+          source: useLivePrice ? 'live' : 'buyPrice'
+        };
+      }
+
+      function calcLedgerMetrics(record) {
+        const shares = Number(record.shares || 0);
+        const buyPrice = Number(record.buyPrice || 0);
+        const effective = getEffectivePrice(record);
+        const invested = shares * buyPrice;
+        const curVal = shares * effective.price;
+        const pnl = curVal - invested;
+        const pct = invested > 0 ? pnl / invested * 100 : 0;
+        return { ...effective, invested, curVal, pnl, pct };
+      }
+
+      function saveLedgerToLocal() {
+        try {
+          localStorage.setItem(LEDGER_LOCAL_KEY, JSON.stringify(ledger));
+        } catch(e) {
+          console.warn('saveLedgerToLocal failed:', e);
+        }
+      }
+
+      function populateLedgerSelectors() {
+        ensureTodayLedger();
+        renderLedgerTabs();
+        updateSaveLedgerSelect();
+        updateTopBotLedgerSelect();
+        updateTopBotCategorySelect();
+        renderCharts();
+      }
+
       function renderLedger() {
         if(!currentLedgerDate || !ledger[currentLedgerDate]) { ensureTodayLedger(); }
 
@@ -1493,8 +1540,7 @@
 
         if(pnlF) {
           data = data.filter(r => {
-            const lp = livePrices[r.code]||r.buyPrice;
-            const pct = r.buyPrice>0?(lp-r.buyPrice)/r.buyPrice*100:0;
+            const pct = calcLedgerMetrics(r).pct;
             if(pnlF==='profit') return pct>0;
             if(pnlF==='loss') return pct<0;
             if(pnlF==='small') return Math.abs(pct)<=5;
@@ -1506,11 +1552,9 @@
     if (ledgerSortCol) {
       data.sort((a, b) => {
         const getVal = (r) => {
-          const lp = livePrices[r.code] || r.buyPrice;
-          const invested = r.shares * r.buyPrice;
-          const curVal = r.shares * lp;
-          if (ledgerSortCol === 'pnl') return curVal - invested;
-          if (ledgerSortCol === 'pct') return invested > 0 ? (curVal - invested) / invested * 100 : 0;
+          const m = calcLedgerMetrics(r);
+          if (ledgerSortCol === 'pnl') return m.pnl;
+          if (ledgerSortCol === 'pct') return m.pct;
           return 0;
         };
         return ledgerSortDir * (getVal(a) - getVal(b));
@@ -1536,22 +1580,14 @@
     </tr>`;
 
         document.getElementById('ledgerBody').innerHTML = data.map(r => {
-          // 若現價快取不是今日更新的，不能用舊快取算損益（避免新買股票顯示假漲幅）
-          const todayStr = new Date().toISOString().split('T')[0];
-          const priceIsToday = livePriceTimestamp && new Date(livePriceTimestamp).toISOString().split('T')[0] === todayStr;
-          const lp = (priceIsToday && livePrices[r.code]) ? livePrices[r.code] : r.buyPrice;
-          const isLive = !!(priceIsToday && livePrices[r.code]);
-          const invested = r.shares*r.buyPrice;
-          const curVal = r.shares*lp;
-          const pnl = curVal-invested;
-          const pct = invested>0?pnl/invested*100:0;
-          const pnlCls = pnl>=0?'pos':'neg';
+          const m = calcLedgerMetrics(r);
+          const pnlCls = m.pnl>=0?'pos':'neg';
           const catTags = String(r.cat).split(',').map(c => {
             const cc = CAT_COLORS[c]||'#888';
             const cl = CAT_LABELS[c]||c;
             return `<span class="cat-tag" style="background:${cc}22;color:${cc}">${cl}</span>`;
           }).join(' ');
-          const liveBadge = isLive
+          const liveBadge = m.isLive
             ? `<span class="live-badge">即時</span>`
             : `<span class="live-badge stale">估算</span>`;
           return `<tr>
@@ -1561,23 +1597,22 @@
             <td>${catTags}</td>
             <td class="price-cell">${r.buyPrice.toFixed(2)}</td>
             <td class="price-cell">${r.shares}</td>
-            <td class="price-cell">${invested.toFixed(0)}</td>
-            <td class="price-cell">${lp.toFixed(2)}${liveBadge}</td>
-            <td class="price-cell">${curVal.toFixed(0)}</td>
-            <td class="pnl-cell ${pnlCls}">${pnl>=0?'+':''}${pnl.toFixed(0)}</td>
-            <td class="pct-cell ${pnlCls}">${pct>=0?'+':''}${pct.toFixed(1)}%</td>
+            <td class="price-cell">${m.invested.toFixed(0)}</td>
+            <td class="price-cell">${m.price.toFixed(2)}${liveBadge}</td>
+            <td class="price-cell">${m.curVal.toFixed(0)}</td>
+            <td class="pnl-cell ${pnlCls}">${m.pnl>=0?'+':''}${m.pnl.toFixed(0)}</td>
+            <td class="pct-cell ${pnlCls}">${m.pct>=0?'+':''}${m.pct.toFixed(1)}%</td>
             <td><button class="btn red" style="padding:3px 8px;font-size:11px;" onclick="deleteLedger('${currentLedgerDate}',${r._idx})">刪除</button></td>
           </tr>`;
         }).join('');
 
-        const ti = data.reduce((a,r)=>a+r.shares*r.buyPrice,0);
-        const tv = data.reduce((a,r)=>a+r.shares*(livePrices[r.code]||r.buyPrice),0);
+        const metrics = data.map(calcLedgerMetrics);
+        const ti = metrics.reduce((a,m)=>a+m.invested,0);
+        const tv = metrics.reduce((a,m)=>a+m.curVal,0);
         const tp = tv-ti;
         const tpct = ti>0?tp/ti*100:0;
         const pc = tp>=0?'pos':'neg';
-        const winRate = data.length>0?Math.round(data.filter(r=>{
-          const lp=livePrices[r.code]||r.buyPrice; return lp>r.buyPrice;
-        }).length/data.length*100):0;
+        const winRate = data.length>0?Math.round(metrics.filter(m=>m.pnl>0).length/data.length*100):0;
 
         document.getElementById('ledgerSummary').innerHTML = `
           <div class="stat-card"><div class="label">帳務筆數</div><div class="value neu">${data.length}</div></div>
@@ -2278,11 +2313,7 @@
         const today = now.toISOString().split('T')[0];
 
         const makeRows = (records) => records.map(r => {
-          const lp = livePrices[r.code]||r.buyPrice;
-          const invested = r.shares*r.buyPrice;
-          const curVal = r.shares*lp;
-          const pnl = curVal-invested;
-          const pct = invested>0?pnl/invested*100:0;
+          const m = calcLedgerMetrics(r);
           return {
             '帳本日期': r._ledgerKey||currentLedgerDate,
             '交易日期': r.date,
@@ -2292,11 +2323,12 @@
             '貝氏評分': r.score,
             '買入價': r.buyPrice,
             '股數': r.shares,
-            '投入金額': invested.toFixed(0),
-            '現價': lp.toFixed(2),
-            '市值': curVal.toFixed(0),
-            '損益': pnl.toFixed(0),
-            '損益%': pct.toFixed(2)+'%'
+            '投入金額': m.invested.toFixed(0),
+            '現價': m.price.toFixed(2),
+            '價格來源': m.isLive ? '今日現價' : '買入價估算',
+            '市值': m.curVal.toFixed(0),
+            '損益': m.pnl.toFixed(0),
+            '損益%': m.pct.toFixed(2)+'%'
           };
         });
 
@@ -2366,14 +2398,12 @@
           const catStats = {};
           Object.keys(ledger).forEach(ledgerKey => {
             (ledger[ledgerKey]||[]).forEach(r => {
-              const lp = livePrices[r.code]||r.buyPrice;
-              const invested = r.shares*r.buyPrice;
-              const curVal = r.shares*lp;
-              totalInvested += invested;
-              totalCurrentVal += curVal;
+              const m = calcLedgerMetrics(r);
+              totalInvested += m.invested;
+              totalCurrentVal += m.curVal;
               if(!catStats[r.cat]) catStats[r.cat] = {invested:0,current:0};
-              catStats[r.cat].invested += invested;
-              catStats[r.cat].current += curVal;
+              catStats[r.cat].invested += m.invested;
+              catStats[r.cat].current += m.curVal;
             });
           });
           
@@ -2491,11 +2521,7 @@
 
         // ── 明細工作表 ──
         const detailRows = allRecords.map(r => {
-          const lp = livePrices[r.code] || r.buyPrice;
-          const invested = r.shares * r.buyPrice;
-          const curVal = r.shares * lp;
-          const pnl = curVal - invested;
-          const pct = invested > 0 ? pnl / invested * 100 : 0;
+          const m = calcLedgerMetrics(r);
           return {
             '帳本': r._ledgerKey,
             '交易日期': r.date,
@@ -2505,25 +2531,24 @@
             '貝氏評分': r.score ?? '',
             '買入價': r.buyPrice,
             '股數': r.shares,
-            '投入金額': +invested.toFixed(0),
-            '現價': +parseFloat(lp).toFixed(2),
-            '市值': +curVal.toFixed(0),
-            '損益': +pnl.toFixed(0),
-            '損益%': pct.toFixed(2) + '%'
+            '投入金額': +m.invested.toFixed(0),
+            '現價': +m.price.toFixed(2),
+            '價格來源': m.isLive ? '今日現價' : '買入價估算',
+            '市值': +m.curVal.toFixed(0),
+            '損益': +m.pnl.toFixed(0),
+            '損益%': m.pct.toFixed(2) + '%'
           };
         });
 
         // ── 分類損益匯總 ──
         const catMap = {};
         allRecords.forEach(r => {
-          const lp = livePrices[r.code] || r.buyPrice;
-          const invested = r.shares * r.buyPrice;
-          const curVal = r.shares * lp;
+          const m = calcLedgerMetrics(r);
           if (!catMap[r.cat]) catMap[r.cat] = { invested: 0, current: 0, count: 0, win: 0 };
-          catMap[r.cat].invested += invested;
-          catMap[r.cat].current += curVal;
+          catMap[r.cat].invested += m.invested;
+          catMap[r.cat].current += m.curVal;
           catMap[r.cat].count++;
-          if (lp > r.buyPrice) catMap[r.cat].win++;
+          if (m.pnl > 0) catMap[r.cat].win++;
         });
 
         const catRows = Object.entries(catMap).map(([cat, s]) => {
@@ -2541,11 +2566,12 @@
         });
 
         // ── 總計 ──
-        const totalInvested = allRecords.reduce((a, r) => a + r.shares * r.buyPrice, 0);
-        const totalCurrent = allRecords.reduce((a, r) => a + r.shares * (livePrices[r.code] || r.buyPrice), 0);
+        const allMetrics = allRecords.map(calcLedgerMetrics);
+        const totalInvested = allMetrics.reduce((a, m) => a + m.invested, 0);
+        const totalCurrent = allMetrics.reduce((a, m) => a + m.curVal, 0);
         const totalPnl = totalCurrent - totalInvested;
         const totalPct = totalInvested > 0 ? totalPnl / totalInvested * 100 : 0;
-        const winCount = allRecords.filter(r => (livePrices[r.code] || r.buyPrice) > r.buyPrice).length;
+        const winCount = allMetrics.filter(m => m.pnl > 0).length;
 
         const summaryRows = [
           { '項目': '統計區間', '值': range ? `${range.from} ~ ${range.to}` : '全部' },
@@ -2581,11 +2607,7 @@
           // 每個帳本變成一張工作表
           Object.keys(byLedger).sort().forEach(ledgerKey => {
             const rows = byLedger[ledgerKey].map(r => {
-              const lp = livePrices[r.code] || r.buyPrice;
-              const invested = r.shares * r.buyPrice;
-              const curVal = r.shares * lp;
-              const pnl = curVal - invested;
-              const pct = invested > 0 ? pnl / invested * 100 : 0;
+              const m = calcLedgerMetrics(r);
               return {
                 '交易日期': r.date,
                 '代號': r.code,
@@ -2594,11 +2616,12 @@
                 '貝氏評分': r.score ?? '',
                 '買入價': r.buyPrice,
                 '股數': r.shares,
-                '投入金額': +invested.toFixed(0),
-                '現價': +parseFloat(lp).toFixed(2),
-                '市值': +curVal.toFixed(0),
-                '損益': +pnl.toFixed(0),
-                '損益%': pct.toFixed(2) + '%'
+                '投入金額': +m.invested.toFixed(0),
+                '現價': +m.price.toFixed(2),
+                '價格來源': m.isLive ? '今日現價' : '買入價估算',
+                '市值': +m.curVal.toFixed(0),
+                '損益': +m.pnl.toFixed(0),
+                '損益%': m.pct.toFixed(2) + '%'
               };
             });
             sheetsObj[ledgerKey] = rows;
@@ -2626,9 +2649,8 @@
 
         // 計算每筆的損益%
         const withPct = allRecords.map(r => {
-          const lp = livePrices[r.code] || r.buyPrice;
-          const pct = r.buyPrice > 0 ? (lp - r.buyPrice) / r.buyPrice * 100 : 0;
-          return { ...r, pct };
+          const m = calcLedgerMetrics(r);
+          return { ...r, pct: m.pct };
         });
 
       // 按「日期 + 分類」分組
@@ -2815,8 +2837,7 @@
         });
 
         const pnlPcts=allLedgerData.map(r=>{
-          const lp=livePrices[r.code]||r.buyPrice;
-          return r.buyPrice>0?(lp-r.buyPrice)/r.buyPrice*100:0;
+          return calcLedgerMetrics(r).pct;
         });
         const bins=[-20,-10,-5,-2,0,2,5,10,20,Infinity];
         const bLabels=['<-20%','-20~-10%','-10~-5%','-5~-2%','-2~0%','0~2%','2~5%','5~10%','10~20%','>20%'];
@@ -2834,9 +2855,9 @@
         const catPnls={};
         const catInvestments={}; // 追蹤各分類的總投入金額
         allLedgerData.forEach(r=>{
-          const lp=livePrices[r.code]||r.buyPrice;
-          catPnls[r.cat]=(catPnls[r.cat]||0)+r.shares*(lp-r.buyPrice);
-          catInvestments[r.cat]=(catInvestments[r.cat]||0)+r.shares*r.buyPrice;
+          const m = calcLedgerMetrics(r);
+          catPnls[r.cat]=(catPnls[r.cat]||0)+m.pnl;
+          catInvestments[r.cat]=(catInvestments[r.cat]||0)+m.invested;
         });
         const pnlCatKeys=Object.keys(catPnls);
         appCharts.score = new Chart(document.getElementById('scoreBarChart'),{
@@ -2871,11 +2892,9 @@
           type:'bar',
           data:{labels:ledDisplay.map(r=>r.name),
             datasets:[{label:'損益(NTD)',data:ledDisplay.map(r=>{
-              const lp=livePrices[r.code]||r.buyPrice;
-              return r.shares*(lp-r.buyPrice);
+              return calcLedgerMetrics(r).pnl;
             }),backgroundColor:ledDisplay.map(r=>{
-              const lp=livePrices[r.code]||r.buyPrice;
-              return r.shares*(lp-r.buyPrice)>=0?'rgba(0,217,126,0.65)':'rgba(255,77,109,0.65)';
+              return calcLedgerMetrics(r).pnl>=0?'rgba(0,217,126,0.65)':'rgba(255,77,109,0.65)';
             }),borderRadius:4}]},
           options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
             scales:{x:{ticks:{color:'#7a5a3e',font:{size:10},maxRotation:45},grid:{color:'#f0d9c4'}},
@@ -3135,13 +3154,20 @@
       function normalizeUploadRows(rows) {
         return rows.map(row=>{
           const n={};
-          Object.keys(row).forEach(k=>{n[k.trim().replace(/\s+/g,'').toLowerCase()]=row[k];});
-          const code=n['代號']||n['code']||n['ticker'];
-          const name=n['名稱']||n['name'];
+          Object.keys(row).forEach(k=>{
+            const key = String(k).replace(/^\uFEFF/, '').trim().replace(/\s+/g,'').toLowerCase();
+            n[key]=row[k];
+          });
+          const code=String(n['代號']||n['code']||n['ticker']||'').trim();
+          const name=String(n['名稱']||n['name']||'').trim();
           if(!code||!name) return null;
-          return {'代號':String(code),'名稱':String(name),'分類':n['分類']||n['category']||'long_term',
-            '現價':parseFloat(n['現價']||n['price']||0)||0,'漲幅':n['漲幅']||n['change']||'',
-            '貝氏評分':parseFloat(n['貝氏評分']||n['score']||0)||0};
+          const rawCat = String(n['分類']||n['category']||'long_term').trim();
+          const validCats = rawCat.split(',').map(c=>c.trim()).filter(c=>CAT_LABELS[c]);
+          const price = parseFloat(n['現價']||n['price']||0);
+          const score = parseFloat(n['貝氏評分']||n['score']||0);
+          return {'代號':code,'名稱':name,'分類':validCats.length ? validCats.join(',') : 'long_term',
+            '現價':Number.isFinite(price) && price > 0 ? price : 0,'漲幅':n['漲幅']||n['change']||'',
+            '貝氏評分':Number.isFinite(score) ? score : 0};
         }).filter(r=>r&&r['代號']&&r['名稱']);
       }
 
@@ -3552,9 +3578,9 @@
           return;
         }
 
-        // ── 2. 對齊最新現價（查無現價則 fallback 到 buyPrice）
+        // ── 2. 對齊帳本估值規則（今日現價可用才採用，否則 fallback 到 buyPrice）
         virtualLedger.forEach(stock => {
-          stock._livePrice = (livePrices[stock.code] > 0) ? livePrices[stock.code] : stock.buyPrice;
+          stock._livePrice = calcLedgerMetrics(stock).price;
         });
 
         // ── 3. 分組計算（Group By cat）
@@ -4286,12 +4312,8 @@
         // 3. 補齊現價與損益，score 直接取帳本欄位
         const enriched = allLedger.map(r => {
           const score     = parseFloat(r.score) || 0;
-          const livePrice = livePrices[r.code] || r.buyPrice;
-          const invested  = r.buyPrice * r.shares;
-          const curVal    = livePrice  * r.shares;
-          const pnl       = curVal - invested;
-          const pct       = invested > 0 ? pnl / invested * 100 : 0;
-          return { ...r, score, livePrice, invested, curVal, pnl, pct };
+          const m = calcLedgerMetrics(r);
+          return { ...r, score, livePrice: m.price, invested: m.invested, curVal: m.curVal, pnl: m.pnl, pct: m.pct };
         });
 
         const withScore    = enriched.filter(r => r.score > 0);
