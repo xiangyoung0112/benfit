@@ -2472,6 +2472,13 @@
         return null;
       }
 
+      function getExportFilenameDatePrefix() {
+        const now = new Date();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        return `${mm}.${dd}`;
+      }
+
       function doExportWithRange() {
         const range = getExportDateRange();
         const fmt = document.getElementById('exportRangeFormat').value;
@@ -2558,7 +2565,7 @@
         ];
 
         const label = range ? `${range.from}_${range.to}` : '全部';
-        const filename = `損益報表_${label}`;
+        const filename = `${getExportFilenameDatePrefix()}損益報表_${label}`;
 
         if (fmt === 'csv') {
           // CSV 只輸出明細
@@ -2709,6 +2716,7 @@
 
         const fmt = document.getElementById('exportRangeFormat').value;
         const label = range ? `${range.from}_${range.to}` : '全部';
+        const filename = `${getExportFilenameDatePrefix()}分位勝率分析_${label}`;
 
         if (fmt === 'csv') {
           const flatRows = [];
@@ -2718,9 +2726,9 @@
               if (row['分類']) flatRows.push({ '日期': date, ...row });
             });
           });
-          exportCsv(flatRows, `分位勝率分析_${label}`);
+          exportCsv(flatRows, filename);
         } else {
-          exportXlsxMultisheet(sheetsObj, `分位勝率分析_${label}`);
+          exportXlsxMultisheet(sheetsObj, filename);
         }
 
         document.getElementById('exportRangeModal').classList.remove('open');
