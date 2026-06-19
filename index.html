@@ -402,7 +402,7 @@
           <button class="nav-btn" onclick="showPage('settings',this)">⚙️ 設定</button>
         </div>
         <div class="date-badge" id="dateBadge">--</div>
-        <div class="date-badge" id="proxyBadge" style="background:var(--green-dim);border-color:var(--green);color:var(--green2);">📊 GAS公式</div>
+        <div class="date-badge" id="proxyBadge" style="background:var(--green-dim);border-color:var(--green);color:var(--green2);">🌐 GAS代理</div>
         <div class="price-cache-badge" id="priceCacheBadge">現價 --</div>
         <button class="gas-btn" onclick="syncToGAS()">☁️ 同步GAS<div class="sync-indicator" id="syncIndicator"></div></button>
       </div>
@@ -684,18 +684,18 @@
         <div class="gas-panel">
           <h3>🌐 代理 Proxy 設定（現價查詢）</h3>
           <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">
-            選擇現價更新來源：<br>
-            <b>方案1</b>：透過 <b>GAS / GoogleFinance</b> 讀取試算表公式快取，適合收盤後回測。<br>
-            <b>方案2</b>：使用公開 CORS Proxy 連線 TWSE MIS，適合盤中即時查價（速度較慢，有流量限制）。<br>
+            瀏覽器直接連線台灣證交所 API 時會被 CORS 封鎖。選擇一個代理方式：<br>
+            <b>方案1</b>（推薦）：填入你的 <b>GAS URL</b>（上方），系統會透過 GAS 抓取現價。<br>
+            <b>方案2</b>：使用公開 CORS Proxy（速度較慢，有流量限制）。<br>
             <b>方案3</b>：自訂 Proxy URL，格式：<code style="font-size:11px;background:var(--surface3);padding:1px 5px;border-radius:3px;">{url}</code> 會被替換為目標網址。
           </p>
           <div class="gas-row" style="gap:10px;flex-wrap:wrap;align-items:flex-start;">
             <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:260px;">
               <label style="font-size:12px;color:var(--text2);">代理模式</label>
               <select id="proxyMode" onchange="onProxyModeChange()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:8px 10px;border-radius:var(--r);outline:none;">
-                <option value="gas">GAS公式快取（盤後/回測）</option>
-                <option value="allorigins">TWSE即時查價：allorigins.win（盤中）</option>
-                <option value="corsproxy">TWSE即時查價：corsproxy.io（盤中）</option>
+                <option value="gas">透過 GAS 代理（推薦）</option>
+                <option value="allorigins">allorigins.win（公開）</option>
+                <option value="corsproxy">corsproxy.io（公開）</option>
                 <option value="custom">自訂 Proxy URL</option>
               </select>
             </div>
@@ -1470,53 +1470,6 @@
         return null;
       }
 
-      const LEDGER_LOCAL_KEY = 'ledger_cache';
-
-      function isTodayPriceCache() {
-        if(!livePriceTimestamp) return false;
-        const todayStr = new Date().toISOString().split('T')[0];
-        return new Date(livePriceTimestamp).toISOString().split('T')[0] === todayStr;
-      }
-
-      function getEffectivePrice(record) {
-        const rawPrice = livePrices[record.code];
-        const hasLivePrice = rawPrice !== undefined && rawPrice !== null && Number(rawPrice) > 0;
-        const useLivePrice = hasLivePrice && isTodayPriceCache();
-        return {
-          price: useLivePrice ? Number(rawPrice) : Number(record.buyPrice || 0),
-          isLive: useLivePrice,
-          source: useLivePrice ? 'live' : 'buyPrice'
-        };
-      }
-
-      function calcLedgerMetrics(record) {
-        const shares = Number(record.shares || 0);
-        const buyPrice = Number(record.buyPrice || 0);
-        const effective = getEffectivePrice(record);
-        const invested = shares * buyPrice;
-        const curVal = shares * effective.price;
-        const pnl = curVal - invested;
-        const pct = invested > 0 ? pnl / invested * 100 : 0;
-        return { ...effective, invested, curVal, pnl, pct };
-      }
-
-      function saveLedgerToLocal() {
-        try {
-          localStorage.setItem(LEDGER_LOCAL_KEY, JSON.stringify(ledger));
-        } catch(e) {
-          console.warn('saveLedgerToLocal failed:', e);
-        }
-      }
-
-      function populateLedgerSelectors() {
-        ensureTodayLedger();
-        renderLedgerTabs();
-        updateSaveLedgerSelect();
-        updateTopBotLedgerSelect();
-        updateTopBotCategorySelect();
-        renderCharts();
-      }
-
       function renderLedger() {
         if(!currentLedgerDate || !ledger[currentLedgerDate]) { ensureTodayLedger(); }
 
@@ -1540,7 +1493,8 @@
 
         if(pnlF) {
           data = data.filter(r => {
-            const pct = calcLedgerMetrics(r).pct;
+            const lp = livePrices[r.code]||r.buyPrice;
+            const pct = r.buyPrice>0?(lp-r.buyPrice)/r.buyPrice*100:0;
             if(pnlF==='profit') return pct>0;
             if(pnlF==='loss') return pct<0;
             if(pnlF==='small') return Math.abs(pct)<=5;
@@ -1552,9 +1506,11 @@
     if (ledgerSortCol) {
       data.sort((a, b) => {
         const getVal = (r) => {
-          const m = calcLedgerMetrics(r);
-          if (ledgerSortCol === 'pnl') return m.pnl;
-          if (ledgerSortCol === 'pct') return m.pct;
+          const lp = livePrices[r.code] || r.buyPrice;
+          const invested = r.shares * r.buyPrice;
+          const curVal = r.shares * lp;
+          if (ledgerSortCol === 'pnl') return curVal - invested;
+          if (ledgerSortCol === 'pct') return invested > 0 ? (curVal - invested) / invested * 100 : 0;
           return 0;
         };
         return ledgerSortDir * (getVal(a) - getVal(b));
@@ -1580,14 +1536,22 @@
     </tr>`;
 
         document.getElementById('ledgerBody').innerHTML = data.map(r => {
-          const m = calcLedgerMetrics(r);
-          const pnlCls = m.pnl>=0?'pos':'neg';
+          // 若現價快取不是今日更新的，不能用舊快取算損益（避免新買股票顯示假漲幅）
+          const todayStr = new Date().toISOString().split('T')[0];
+          const priceIsToday = livePriceTimestamp && new Date(livePriceTimestamp).toISOString().split('T')[0] === todayStr;
+          const lp = (priceIsToday && livePrices[r.code]) ? livePrices[r.code] : r.buyPrice;
+          const isLive = !!(priceIsToday && livePrices[r.code]);
+          const invested = r.shares*r.buyPrice;
+          const curVal = r.shares*lp;
+          const pnl = curVal-invested;
+          const pct = invested>0?pnl/invested*100:0;
+          const pnlCls = pnl>=0?'pos':'neg';
           const catTags = String(r.cat).split(',').map(c => {
             const cc = CAT_COLORS[c]||'#888';
             const cl = CAT_LABELS[c]||c;
             return `<span class="cat-tag" style="background:${cc}22;color:${cc}">${cl}</span>`;
           }).join(' ');
-          const liveBadge = m.isLive
+          const liveBadge = isLive
             ? `<span class="live-badge">即時</span>`
             : `<span class="live-badge stale">估算</span>`;
           return `<tr>
@@ -1597,22 +1561,23 @@
             <td>${catTags}</td>
             <td class="price-cell">${r.buyPrice.toFixed(2)}</td>
             <td class="price-cell">${r.shares}</td>
-            <td class="price-cell">${m.invested.toFixed(0)}</td>
-            <td class="price-cell">${m.price.toFixed(2)}${liveBadge}</td>
-            <td class="price-cell">${m.curVal.toFixed(0)}</td>
-            <td class="pnl-cell ${pnlCls}">${m.pnl>=0?'+':''}${m.pnl.toFixed(0)}</td>
-            <td class="pct-cell ${pnlCls}">${m.pct>=0?'+':''}${m.pct.toFixed(1)}%</td>
+            <td class="price-cell">${invested.toFixed(0)}</td>
+            <td class="price-cell">${lp.toFixed(2)}${liveBadge}</td>
+            <td class="price-cell">${curVal.toFixed(0)}</td>
+            <td class="pnl-cell ${pnlCls}">${pnl>=0?'+':''}${pnl.toFixed(0)}</td>
+            <td class="pct-cell ${pnlCls}">${pct>=0?'+':''}${pct.toFixed(1)}%</td>
             <td><button class="btn red" style="padding:3px 8px;font-size:11px;" onclick="deleteLedger('${currentLedgerDate}',${r._idx})">刪除</button></td>
           </tr>`;
         }).join('');
 
-        const metrics = data.map(calcLedgerMetrics);
-        const ti = metrics.reduce((a,m)=>a+m.invested,0);
-        const tv = metrics.reduce((a,m)=>a+m.curVal,0);
+        const ti = data.reduce((a,r)=>a+r.shares*r.buyPrice,0);
+        const tv = data.reduce((a,r)=>a+r.shares*(livePrices[r.code]||r.buyPrice),0);
         const tp = tv-ti;
         const tpct = ti>0?tp/ti*100:0;
         const pc = tp>=0?'pos':'neg';
-        const winRate = data.length>0?Math.round(metrics.filter(m=>m.pnl>0).length/data.length*100):0;
+        const winRate = data.length>0?Math.round(data.filter(r=>{
+          const lp=livePrices[r.code]||r.buyPrice; return lp>r.buyPrice;
+        }).length/data.length*100):0;
 
         document.getElementById('ledgerSummary').innerHTML = `
           <div class="stat-card"><div class="label">帳務筆數</div><div class="value neu">${data.length}</div></div>
@@ -1933,7 +1898,7 @@
         if(wrap) wrap.style.display = (mode === 'custom') ? 'flex' : 'none';
         const badge = document.getElementById('proxyBadge');
         if(badge) {
-          const labels = {gas:'📊 GAS公式', allorigins:'📈 TWSE盤中', corsproxy:'📈 TWSE盤中', custom:'🌐 自訂代理'};
+          const labels = {gas:'🌐 GAS代理', allorigins:'🌐 allorigins代理', corsproxy:'🌐 corsproxy代理', custom:'🌐 自訂代理'};
           badge.textContent = labels[mode] || '🌐 代理';
         }
       }
@@ -1971,7 +1936,7 @@
             if(keys.length > 0) {
               const sample = keys[0];
               statusDot.className='status-dot ok';
-              statusText.textContent=`GAS公式快取 OK！範例: ${sample}=${d.prices[sample]}`;
+              statusText.textContent=`GAS批量代理 OK！範例: ${sample}=${d.prices[sample]}`;
             } else {
               statusDot.className='status-dot err';
               statusText.textContent='GAS連線正常，但目前無現價（非交易時間，屬正常）';
@@ -2158,7 +2123,6 @@
           if(prices && Object.keys(prices).length > 0) {
             let updated = 0;
             let failedCodes = [];
-            let fallbackPrices = {};
             codes.forEach(c => {
               if(prices[c] > 0) { livePrices[c] = prices[c]; updated++; }
               else failedCodes.push(c);
@@ -2183,32 +2147,9 @@
               failedCodes = stillFailed;
             }
 
-            // GoogleFinance/GAS 查不到的代號，接著用前端 TWSE Proxy 補洞。
-            if(failedCodes.length > 0) {
-              showLoading(`GoogleFinance 缺 ${failedCodes.length} 檔，改用 TWSE Proxy 補查...`);
-              showProgress(0, failedCodes.length * 2);
-              const proxyPrices = await fetchBatchPricesViaProxy(failedCodes, (done, total, batchPrices) => {
-                Object.entries(batchPrices).forEach(([c, p]) => {
-                  if(p > 0 && !fallbackPrices[c]) {
-                    livePrices[c] = p;
-                    fallbackPrices[c] = p;
-                    updated++;
-                  }
-                });
-                showProgress(done, total);
-                document.getElementById('loadingText').textContent =
-                  `TWSE補洞中（TSE→OTC）... ｜✓ ${Object.keys(fallbackPrices).length}/${failedCodes.length} 筆`;
-              });
-              hideProgress();
-              hideLoading();
-              failedCodes = failedCodes.filter(c => !(proxyPrices && proxyPrices[c] > 0));
-            }
-
             livePriceTimestamp = Date.now();
             savePricesToLocal();
-            if(gasUrl && Object.keys(fallbackPrices).length > 0) {
-              enqueuSync(() => pushPriceFallbacksToGAS(fallbackPrices, 'twse_proxy_fallback'), '同步補洞價到GAS...');
-            }
+            if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
             showScanResultModal(updated, codes.length - updated, failedCodes);
             renderPerf(); renderLedger(); return;
           }
@@ -2220,11 +2161,10 @@
         showProgress(0, codes.length * 2);
 
         let updated = 0;
-        let proxySuccessPrices = {};
 
         const prices = await fetchBatchPricesViaProxy(codes, (done, total, batchPrices) => {
           Object.entries(batchPrices).forEach(([c, p]) => {
-            if (p > 0) { livePrices[c] = p; proxySuccessPrices[c] = p; updated++; }
+            if (p > 0) { livePrices[c] = p; updated++; }
           });
           showProgress(done, total);
           document.getElementById('loadingText').textContent =
@@ -2239,7 +2179,7 @@
 
           const retryPrices = await fetchBatchPricesViaProxy(failedCodes, (done, total, batchPrices) => {
             Object.entries(batchPrices).forEach(([c, p]) => {
-              if(p > 0) { livePrices[c] = p; proxySuccessPrices[c] = p; updated++; }
+              if(p > 0) { livePrices[c] = p; updated++; }
             });
             showProgress(done, total);
             document.getElementById('loadingText').textContent =
@@ -2256,9 +2196,7 @@
 
         livePriceTimestamp = Date.now();
         savePricesToLocal();
-        if(gasUrl && Object.keys(proxySuccessPrices).length > 0) {
-          enqueuSync(() => pushPriceFallbacksToGAS(proxySuccessPrices, 'twse_proxy'), '同步盤中價到GAS...');
-        }
+        if(gasUrl) enqueuSync(() => pushPricesToGAS(livePrices), '同步現價到GAS...');
         showScanResultModal(updated, failedCodes.length, failedCodes);
         renderPerf(); renderLedger();
       }
@@ -2340,7 +2278,11 @@
         const today = now.toISOString().split('T')[0];
 
         const makeRows = (records) => records.map(r => {
-          const m = calcLedgerMetrics(r);
+          const lp = livePrices[r.code]||r.buyPrice;
+          const invested = r.shares*r.buyPrice;
+          const curVal = r.shares*lp;
+          const pnl = curVal-invested;
+          const pct = invested>0?pnl/invested*100:0;
           return {
             '帳本日期': r._ledgerKey||currentLedgerDate,
             '交易日期': r.date,
@@ -2350,12 +2292,11 @@
             '貝氏評分': r.score,
             '買入價': r.buyPrice,
             '股數': r.shares,
-            '投入金額': m.invested.toFixed(0),
-            '現價': m.price.toFixed(2),
-            '價格來源': m.isLive ? '今日現價' : '買入價估算',
-            '市值': m.curVal.toFixed(0),
-            '損益': m.pnl.toFixed(0),
-            '損益%': m.pct.toFixed(2)+'%'
+            '投入金額': invested.toFixed(0),
+            '現價': lp.toFixed(2),
+            '市值': curVal.toFixed(0),
+            '損益': pnl.toFixed(0),
+            '損益%': pct.toFixed(2)+'%'
           };
         });
 
@@ -2425,12 +2366,14 @@
           const catStats = {};
           Object.keys(ledger).forEach(ledgerKey => {
             (ledger[ledgerKey]||[]).forEach(r => {
-              const m = calcLedgerMetrics(r);
-              totalInvested += m.invested;
-              totalCurrentVal += m.curVal;
+              const lp = livePrices[r.code]||r.buyPrice;
+              const invested = r.shares*r.buyPrice;
+              const curVal = r.shares*lp;
+              totalInvested += invested;
+              totalCurrentVal += curVal;
               if(!catStats[r.cat]) catStats[r.cat] = {invested:0,current:0};
-              catStats[r.cat].invested += m.invested;
-              catStats[r.cat].current += m.curVal;
+              catStats[r.cat].invested += invested;
+              catStats[r.cat].current += curVal;
             });
           });
           
@@ -2548,7 +2491,11 @@
 
         // ── 明細工作表 ──
         const detailRows = allRecords.map(r => {
-          const m = calcLedgerMetrics(r);
+          const lp = livePrices[r.code] || r.buyPrice;
+          const invested = r.shares * r.buyPrice;
+          const curVal = r.shares * lp;
+          const pnl = curVal - invested;
+          const pct = invested > 0 ? pnl / invested * 100 : 0;
           return {
             '帳本': r._ledgerKey,
             '交易日期': r.date,
@@ -2558,24 +2505,25 @@
             '貝氏評分': r.score ?? '',
             '買入價': r.buyPrice,
             '股數': r.shares,
-            '投入金額': +m.invested.toFixed(0),
-            '現價': +m.price.toFixed(2),
-            '價格來源': m.isLive ? '今日現價' : '買入價估算',
-            '市值': +m.curVal.toFixed(0),
-            '損益': +m.pnl.toFixed(0),
-            '損益%': m.pct.toFixed(2) + '%'
+            '投入金額': +invested.toFixed(0),
+            '現價': +parseFloat(lp).toFixed(2),
+            '市值': +curVal.toFixed(0),
+            '損益': +pnl.toFixed(0),
+            '損益%': pct.toFixed(2) + '%'
           };
         });
 
         // ── 分類損益匯總 ──
         const catMap = {};
         allRecords.forEach(r => {
-          const m = calcLedgerMetrics(r);
+          const lp = livePrices[r.code] || r.buyPrice;
+          const invested = r.shares * r.buyPrice;
+          const curVal = r.shares * lp;
           if (!catMap[r.cat]) catMap[r.cat] = { invested: 0, current: 0, count: 0, win: 0 };
-          catMap[r.cat].invested += m.invested;
-          catMap[r.cat].current += m.curVal;
+          catMap[r.cat].invested += invested;
+          catMap[r.cat].current += curVal;
           catMap[r.cat].count++;
-          if (m.pnl > 0) catMap[r.cat].win++;
+          if (lp > r.buyPrice) catMap[r.cat].win++;
         });
 
         const catRows = Object.entries(catMap).map(([cat, s]) => {
@@ -2593,12 +2541,11 @@
         });
 
         // ── 總計 ──
-        const allMetrics = allRecords.map(calcLedgerMetrics);
-        const totalInvested = allMetrics.reduce((a, m) => a + m.invested, 0);
-        const totalCurrent = allMetrics.reduce((a, m) => a + m.curVal, 0);
+        const totalInvested = allRecords.reduce((a, r) => a + r.shares * r.buyPrice, 0);
+        const totalCurrent = allRecords.reduce((a, r) => a + r.shares * (livePrices[r.code] || r.buyPrice), 0);
         const totalPnl = totalCurrent - totalInvested;
         const totalPct = totalInvested > 0 ? totalPnl / totalInvested * 100 : 0;
-        const winCount = allMetrics.filter(m => m.pnl > 0).length;
+        const winCount = allRecords.filter(r => (livePrices[r.code] || r.buyPrice) > r.buyPrice).length;
 
         const summaryRows = [
           { '項目': '統計區間', '值': range ? `${range.from} ~ ${range.to}` : '全部' },
@@ -2634,7 +2581,11 @@
           // 每個帳本變成一張工作表
           Object.keys(byLedger).sort().forEach(ledgerKey => {
             const rows = byLedger[ledgerKey].map(r => {
-              const m = calcLedgerMetrics(r);
+              const lp = livePrices[r.code] || r.buyPrice;
+              const invested = r.shares * r.buyPrice;
+              const curVal = r.shares * lp;
+              const pnl = curVal - invested;
+              const pct = invested > 0 ? pnl / invested * 100 : 0;
               return {
                 '交易日期': r.date,
                 '代號': r.code,
@@ -2643,12 +2594,11 @@
                 '貝氏評分': r.score ?? '',
                 '買入價': r.buyPrice,
                 '股數': r.shares,
-                '投入金額': +m.invested.toFixed(0),
-                '現價': +m.price.toFixed(2),
-                '價格來源': m.isLive ? '今日現價' : '買入價估算',
-                '市值': +m.curVal.toFixed(0),
-                '損益': +m.pnl.toFixed(0),
-                '損益%': m.pct.toFixed(2) + '%'
+                '投入金額': +invested.toFixed(0),
+                '現價': +parseFloat(lp).toFixed(2),
+                '市值': +curVal.toFixed(0),
+                '損益': +pnl.toFixed(0),
+                '損益%': pct.toFixed(2) + '%'
               };
             });
             sheetsObj[ledgerKey] = rows;
@@ -2676,8 +2626,9 @@
 
         // 計算每筆的損益%
         const withPct = allRecords.map(r => {
-          const m = calcLedgerMetrics(r);
-          return { ...r, pct: m.pct };
+          const lp = livePrices[r.code] || r.buyPrice;
+          const pct = r.buyPrice > 0 ? (lp - r.buyPrice) / r.buyPrice * 100 : 0;
+          return { ...r, pct };
         });
 
       // 按「日期 + 分類」分組
@@ -2864,7 +2815,8 @@
         });
 
         const pnlPcts=allLedgerData.map(r=>{
-          return calcLedgerMetrics(r).pct;
+          const lp=livePrices[r.code]||r.buyPrice;
+          return r.buyPrice>0?(lp-r.buyPrice)/r.buyPrice*100:0;
         });
         const bins=[-20,-10,-5,-2,0,2,5,10,20,Infinity];
         const bLabels=['<-20%','-20~-10%','-10~-5%','-5~-2%','-2~0%','0~2%','2~5%','5~10%','10~20%','>20%'];
@@ -2882,9 +2834,9 @@
         const catPnls={};
         const catInvestments={}; // 追蹤各分類的總投入金額
         allLedgerData.forEach(r=>{
-          const m = calcLedgerMetrics(r);
-          catPnls[r.cat]=(catPnls[r.cat]||0)+m.pnl;
-          catInvestments[r.cat]=(catInvestments[r.cat]||0)+m.invested;
+          const lp=livePrices[r.code]||r.buyPrice;
+          catPnls[r.cat]=(catPnls[r.cat]||0)+r.shares*(lp-r.buyPrice);
+          catInvestments[r.cat]=(catInvestments[r.cat]||0)+r.shares*r.buyPrice;
         });
         const pnlCatKeys=Object.keys(catPnls);
         appCharts.score = new Chart(document.getElementById('scoreBarChart'),{
@@ -2919,9 +2871,11 @@
           type:'bar',
           data:{labels:ledDisplay.map(r=>r.name),
             datasets:[{label:'損益(NTD)',data:ledDisplay.map(r=>{
-              return calcLedgerMetrics(r).pnl;
+              const lp=livePrices[r.code]||r.buyPrice;
+              return r.shares*(lp-r.buyPrice);
             }),backgroundColor:ledDisplay.map(r=>{
-              return calcLedgerMetrics(r).pnl>=0?'rgba(0,217,126,0.65)':'rgba(255,77,109,0.65)';
+              const lp=livePrices[r.code]||r.buyPrice;
+              return r.shares*(lp-r.buyPrice)>=0?'rgba(0,217,126,0.65)':'rgba(255,77,109,0.65)';
             }),borderRadius:4}]},
           options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
             scales:{x:{ticks:{color:'#7a5a3e',font:{size:10},maxRotation:45},grid:{color:'#f0d9c4'}},
@@ -3067,17 +3021,6 @@
         return await r.json();
       }
 
-      async function pushPriceFallbacksToGAS(prices, source='twse_proxy') {
-        if(!gasUrl || !prices || Object.keys(prices).length === 0) return;
-        const r = await fetch(gasUrl, {
-          method: 'POST', mode: 'cors', cache: 'no-cache', credentials: 'omit',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ action: 'savePriceFallbacks', source, prices })
-        });
-        if(!r.ok) throw new Error(`HTTP ${r.status}`);
-        return await r.json();
-      }
-
       async function saveTodayPricesToGAS(stocks, date) {
         if(!gasUrl) return;
         const priceData = stocks.map(s=>({date,code:s['代號'],name:s['名稱'],cat:s['分類'],price:livePrices[s['代號']]||s['現價'],score:s['貝氏評分']}));
@@ -3192,20 +3135,13 @@
       function normalizeUploadRows(rows) {
         return rows.map(row=>{
           const n={};
-          Object.keys(row).forEach(k=>{
-            const key = String(k).replace(/^\uFEFF/, '').trim().replace(/\s+/g,'').toLowerCase();
-            n[key]=row[k];
-          });
-          const code=String(n['代號']||n['code']||n['ticker']||'').trim();
-          const name=String(n['名稱']||n['name']||'').trim();
+          Object.keys(row).forEach(k=>{n[k.trim().replace(/\s+/g,'').toLowerCase()]=row[k];});
+          const code=n['代號']||n['code']||n['ticker'];
+          const name=n['名稱']||n['name'];
           if(!code||!name) return null;
-          const rawCat = String(n['分類']||n['category']||'long_term').trim();
-          const validCats = rawCat.split(',').map(c=>c.trim()).filter(c=>CAT_LABELS[c]);
-          const price = parseFloat(n['現價']||n['price']||0);
-          const score = parseFloat(n['貝氏評分']||n['score']||0);
-          return {'代號':code,'名稱':name,'分類':validCats.length ? validCats.join(',') : 'long_term',
-            '現價':Number.isFinite(price) && price > 0 ? price : 0,'漲幅':n['漲幅']||n['change']||'',
-            '貝氏評分':Number.isFinite(score) ? score : 0};
+          return {'代號':String(code),'名稱':String(name),'分類':n['分類']||n['category']||'long_term',
+            '現價':parseFloat(n['現價']||n['price']||0)||0,'漲幅':n['漲幅']||n['change']||'',
+            '貝氏評分':parseFloat(n['貝氏評分']||n['score']||0)||0};
         }).filter(r=>r&&r['代號']&&r['名稱']);
       }
 
@@ -3514,771 +3450,6 @@
       }`;
       }
 
-      function renderGASCode() {
-        document.getElementById('gasCode').value = `// ====== 台股績效系統 GAS 後端 v4 ======
-      // GAS 端價格來源：Google Sheet GOOGLEFINANCE 公式
-      // 前端仍保留 TWSE MIS/Proxy 即時查價；本程式只移除 GAS 端 TWSE/TPEx API 抓價
-      // 部署：執行身份「以我的身份」、存取「任何人」
-      // 定時觸發器設定：
-      //   GAS 編輯器 → 左側「觸發條件」→ 新增觸發條件
-      //   函式：updateAllPrices
-      //   觸發類型：時間型（日計時器）
-      //   時間：建議下午 2:00 ~ 3:00，讓 GOOGLEFINANCE 有時間更新到較穩定的收盤價
-      //
-      // 建議新增工作表「股票清單」：
-      //   A 欄放股票代號，例如 2330、2317、2382
-      //   若沒有股票清單，本程式會改從「全台股現價」與「帳本_」工作表收集代號
-
-      const PRICE_SHEET        = '全台股現價';
-      const FORMULA_SHEET      = 'GoogleFinance價格';
-      const STOCK_LIST_SHEET   = '股票清單';
-      const LEDGER_PREFIX      = '帳本_';
-      const TIMEZONE           = 'Asia/Taipei';
-      const FORMULA_RETRIES    = 4;
-      const FORMULA_WAIT_MS    = 3000;
-
-      function doGet(e) {
-        const a = (e.parameter || {}).action;
-        if (a === 'ping') return json({status:'ok', time:new Date().toISOString()});
-        if (a === 'getLedger') return json({data:readAllLedgers()});
-        if (a === 'getPriceCacheInfo') return json(getPriceCacheInfo());
-        if (a === 'getBatchPrices') {
-          const codes = (e.parameter.codes || '').split(',').filter(Boolean);
-          return json({prices:getBatchPrices(codes)});
-        }
-        if (a === 'getBatchPricesWithFallback') {
-          const codes = (e.parameter.codes || '').split(',').filter(Boolean);
-          return json({prices:getBatchPrices(codes)});
-        }
-        if (a === 'getHistoricalPrices') {
-          const codes = (e.parameter.codes || '').split(',').filter(Boolean);
-          return json({prices:getHistoricalPrices(codes, e.parameter.date || '')});
-        }
-        if (a === 'updateAllPrices' || a === 'refreshGoogleFinancePrices') {
-          return json(updateAllPrices());
-        }
-        return json({error:'unknown action'});
-      }
-
-      function doPost(e) {
-        try {
-          const b = JSON.parse(e.postData.contents);
-          if (b.action === 'saveLedger') return json({status:'ok', count:writeLedgerSheet(b.date, b.data)});
-          if (b.action === 'savePriceCache') return json({status:'ok', count:writePriceCacheSheet(b.date, b.prices)});
-          if (b.action === 'getBatchPrices') return json({prices:getBatchPrices(b.codes || [])});
-          if (b.action === 'getBatchPricesWithFallback') return json({prices:getBatchPrices(b.codes || [])});
-          if (b.action === 'getHistoricalPrices') return json({prices:getHistoricalPrices(b.codes || [], b.date || '')});
-          if (b.action === 'refreshGoogleFinancePrices') return json(updateAllPrices(b.codes || []));
-          return json({error:'unknown action'});
-        } catch(err) {
-          return json({error:err.message});
-        }
-      }
-
-      function json(obj) {
-        return ContentService.createTextOutput(JSON.stringify(obj))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-
-      function getBatchPrices(codes) {
-        if (!codes || codes.length === 0) return {};
-
-        const cached = readPriceSheet();
-        const result = {};
-        const needFetch = [];
-
-        normalizeCodes(codes).forEach(function(code) {
-          if (cached[code] && cached[code] > 0) {
-            result[code] = cached[code];
-          } else {
-            needFetch.push(code);
-          }
-        });
-
-        if (needFetch.length > 0) {
-          const formulaPrices = readGoogleFinancePrices(needFetch);
-          needFetch.forEach(function(code) {
-            if (formulaPrices[code] > 0) result[code] = formulaPrices[code];
-          });
-        }
-
-        return result;
-      }
-
-      function getHistoricalPrices(codes, dateStr) {
-        if (!dateStr || !codes || codes.length === 0) return {};
-        return readGoogleFinancePrices(normalizeCodes(codes), dateStr);
-      }
-
-      function updateAllPrices(optionalCodes) {
-        const codes = normalizeCodes(optionalCodes && optionalCodes.length ? optionalCodes : collectStockCodes());
-        if (codes.length === 0) {
-          Logger.log('無股票代號，請建立「股票清單」或先同步帳本');
-          return {status:'empty', count:0, message:'沒有可更新的股票代號'};
-        }
-
-        const prices = readGoogleFinancePrices(codes);
-        const count = writePriceCacheSheet(null, prices);
-        Logger.log('updateAllPrices 完成: ' + count + ' / ' + codes.length + ' 筆');
-        return {status:'ok', count:count, requested:codes.length};
-      }
-
-      function readGoogleFinancePrices(codes, dateStr) {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        let s = ss.getSheetByName(FORMULA_SHEET);
-        if (!s) s = ss.insertSheet(FORMULA_SHEET);
-
-        codes = normalizeCodes(codes);
-        const result = {};
-        if (codes.length === 0) return result;
-
-        s.clearContents();
-        s.getRange(1, 1, 1, 3).setValues([['代號', 'GOOGLEFINANCE價格', '公式更新時間']]);
-        s.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#e8f0fe');
-        s.getRange(2, 1, codes.length, 1).setValues(codes.map(function(code) { return [code]; }));
-
-        const formulas = codes.map(function(code, i) {
-          const row = i + 2;
-          return [dateStr ? historicalFormula(row, dateStr) : liveFormula(row)];
-        });
-        s.getRange(2, 2, formulas.length, 1).setFormulas(formulas);
-
-        const now = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
-        s.getRange(2, 3, codes.length, 1).setValues(codes.map(function() { return [now]; }));
-
-        for (let attempt = 0; attempt < FORMULA_RETRIES; attempt++) {
-          SpreadsheetApp.flush();
-          Utilities.sleep(FORMULA_WAIT_MS);
-
-          const values = s.getRange(2, 2, codes.length, 1).getValues();
-          values.forEach(function(row, i) {
-            const price = parsePrice(row[0]);
-            if (price > 0) result[codes[i]] = price;
-          });
-
-          if (Object.keys(result).length === codes.length) break;
-        }
-
-        return result;
-      }
-
-      function liveFormula(row) {
-        return '=IFERROR(GOOGLEFINANCE("TPE:" & A' + row + ', "price"), IFERROR(GOOGLEFINANCE("TWO:" & A' + row + ', "price"), ""))';
-      }
-
-      function historicalFormula(row, dateStr) {
-        const parts = dateStr.split('-').map(function(n) { return parseInt(n, 10); });
-        if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return liveFormula(row);
-        const d = 'DATE(' + parts[0] + ',' + parts[1] + ',' + parts[2] + ')';
-        return '=IFERROR(INDEX(GOOGLEFINANCE("TPE:" & A' + row + ', "price", ' + d + ', ' + d + '), 2, 2), IFERROR(INDEX(GOOGLEFINANCE("TWO:" & A' + row + ', "price", ' + d + ', ' + d + '), 2, 2), ""))';
-      }
-
-      function collectStockCodes() {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const codeSet = {};
-
-        const listSheet = ss.getSheetByName(STOCK_LIST_SHEET);
-        if (listSheet) {
-          listSheet.getDataRange().getValues().slice(1).forEach(function(r) {
-            const code = normalizeCode(r[0]);
-            if (code) codeSet[code] = true;
-          });
-        }
-
-        const priceSheet = ss.getSheetByName(PRICE_SHEET);
-        if (priceSheet) {
-          priceSheet.getDataRange().getValues().slice(1).forEach(function(r) {
-            const code = normalizeCode(r[0]);
-            if (code) codeSet[code] = true;
-          });
-        }
-
-        ss.getSheets().forEach(function(sheet) {
-          if (!sheet.getName().startsWith(LEDGER_PREFIX)) return;
-          sheet.getDataRange().getValues().slice(1).forEach(function(r) {
-            const code = normalizeCode(r[1]);
-            if (code) codeSet[code] = true;
-          });
-        });
-
-        return Object.keys(codeSet).sort();
-      }
-
-      function readPriceSheet() {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const s = ss.getSheetByName(PRICE_SHEET);
-        if (!s) return {};
-        const rows = s.getDataRange().getValues();
-        const result = {};
-        rows.slice(1).forEach(function(r) {
-          const code = normalizeCode(r[0]);
-          const price = rows[0].length >= 4 ? parsePrice(r[2]) : parsePrice(r[1]);
-          if (code && price > 0) result[code] = price;
-        });
-        return result;
-      }
-
-      function getPriceCacheInfo() {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const s = ss.getSheetByName(PRICE_SHEET);
-        if (!s) return {updatedAt:null, count:0};
-        const rows = s.getDataRange().getValues();
-        const updatedAt = rows.length > 1 ? String(rows[1][2] || '') : null;
-        return {updatedAt:updatedAt, count:Math.max(rows.length - 1, 0)};
-      }
-
-      function writeLedgerSheet(date, data) {
-        if (!date || !data) return 0;
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const sheetName = LEDGER_PREFIX + date;
-        let s = ss.getSheetByName(sheetName);
-        if (!s) s = ss.insertSheet(sheetName);
-
-        s.clearContents();
-        s.appendRow(['日期','代號','名稱','分類','買入價','股數','貝氏評分']);
-        s.getRange(1,1,1,7).setFontWeight('bold').setBackground('#f5e6d3').setFontColor('#3d2b1a');
-
-        if (data.length > 0) {
-          const rows = data.map(function(r) {
-            return [r.date || date, r.code, r.name, r.cat, r.buyPrice, r.shares, r.score];
-          });
-          s.getRange(2, 1, rows.length, 7).setValues(rows);
-        }
-        return data.length;
-      }
-
-      function readAllLedgers() {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const result = [];
-        ss.getSheets().forEach(function(sheet) {
-          const name = sheet.getName();
-          if (!name.startsWith(LEDGER_PREFIX)) return;
-          const ledgerDate = name.replace(LEDGER_PREFIX, '');
-          const rows = sheet.getDataRange().getValues();
-          rows.slice(1).forEach(function(r) {
-            if (!r[1]) return;
-            result.push({
-              ledgerDate:ledgerDate,
-              date:fmtDate(r[0]),
-              code:String(r[1]).trim(),
-              name:r[2],
-              cat:r[3],
-              buyPrice:Number(r[4]),
-              shares:Number(r[5]),
-              score:Number(r[6])
-            });
-          });
-        });
-        return result;
-      }
-
-      function writePriceCacheSheet(date, prices) {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        let s = ss.getSheetByName(PRICE_SHEET);
-        if (!s) s = ss.insertSheet(PRICE_SHEET);
-
-        const now = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
-        const rows = Object.entries(prices || {})
-          .map(function(entry) { return [normalizeCode(entry[0]), parsePrice(entry[1]), now]; })
-          .filter(function(r) { return r[0] && r[1] > 0; });
-
-        s.clearContents();
-        s.appendRow(['代號', '現價', '更新時間']);
-        s.getRange(1,1,1,3).setFontWeight('bold').setBackground('#f5e6d3');
-        if (rows.length > 0) s.getRange(2, 1, rows.length, 3).setValues(rows);
-        return rows.length;
-      }
-
-      function fmtDate(v) {
-        if (v instanceof Date) return Utilities.formatDate(v, TIMEZONE, 'yyyy-MM-dd');
-        return String(v);
-      }
-
-      function normalizeCodes(codes) {
-        const seen = {};
-        return (codes || [])
-          .map(normalizeCode)
-          .filter(function(code) {
-            if (!code || seen[code]) return false;
-            seen[code] = true;
-            return true;
-          });
-      }
-
-      function normalizeCode(v) {
-        return String(v || '').replace(/\\.TW$/i, '').trim();
-      }
-
-      function parsePrice(v) {
-        if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
-        const n = Number(String(v || '').replace(/,/g, '').trim());
-        return Number.isFinite(n) ? n : 0;
-      }
-
-      function testGetPrices() {
-        const prices = getBatchPrices(['2330','2317','2382','3008']);
-        Logger.log(JSON.stringify(prices));
-      }`;
-      }
-
-      function renderGASCode() {
-        document.getElementById('gasCode').value = `// ====== 台股績效系統 GAS 後端 v5 ======
-      // 價格架構：
-      //   1. 全台股現價：完整代號 + GOOGLEFINANCE 公式主表
-      //   2. 盤中即時價：前端 TWSE Proxy 補洞成功後寫入
-      //   3. 前端讀取時會以 GoogleFinance 價優先，GoogleFinance 缺價才使用補洞價
-      //
-      // 建議觸發器：
-      //   updateAllPrices：每日 14:00 ~ 15:00，更新完整代號表與公式
-      //
-      // 注意：
-      //   GOOGLEFINANCE 對部分台股代號可能缺資料；這些代號會由前端 TWSE Proxy 補洞。
-      //   GAS 端不再用 TWSE/TPEx 價格 API 做價格來源，但會用官方清單建立股票代號宇宙。
-
-      const PRICE_SHEET          = '全台股現價';
-      const INTRADAY_PRICE_SHEET = '盤中即時價';
-      const STOCK_LIST_SHEET     = '股票清單';
-      const TEMP_FORMULA_SHEET   = 'GoogleFinance臨時查價';
-      const LEDGER_PREFIX        = '帳本_';
-      const TIMEZONE             = 'Asia/Taipei';
-      const FORMULA_RETRIES      = 4;
-      const FORMULA_WAIT_MS      = 3000;
-
-      function doGet(e) {
-        const a = (e.parameter || {}).action;
-        if (a === 'ping') return json({status:'ok', time:new Date().toISOString()});
-        if (a === 'getLedger') return json({data:readAllLedgers()});
-        if (a === 'getPriceCacheInfo') return json(getPriceCacheInfo());
-        if (a === 'getBatchPrices' || a === 'getBatchPricesWithFallback') {
-          const codes = (e.parameter.codes || '').split(',').filter(Boolean);
-          return json({prices:getBatchPrices(codes)});
-        }
-        if (a === 'getHistoricalPrices') {
-          const codes = (e.parameter.codes || '').split(',').filter(Boolean);
-          return json({prices:getHistoricalPrices(codes, e.parameter.date || '')});
-        }
-        if (a === 'updateAllPrices' || a === 'refreshGoogleFinancePrices' || a === 'updateStockUniverse') {
-          return json(updateAllPrices());
-        }
-        return json({error:'unknown action'});
-      }
-
-      function doPost(e) {
-        try {
-          const b = JSON.parse(e.postData.contents);
-          if (b.action === 'saveLedger') return json({status:'ok', count:writeLedgerSheet(b.date, b.data)});
-          if (b.action === 'savePriceCache' || b.action === 'savePriceFallbacks') {
-            return json({status:'ok', count:writePriceFallbackSheet(b.prices, b.source || 'frontend')});
-          }
-          if (b.action === 'getBatchPrices' || b.action === 'getBatchPricesWithFallback') {
-            return json({prices:getBatchPrices(b.codes || [])});
-          }
-          if (b.action === 'getHistoricalPrices') return json({prices:getHistoricalPrices(b.codes || [], b.date || '')});
-          if (b.action === 'refreshGoogleFinancePrices' || b.action === 'updateStockUniverse') return json(updateAllPrices(b.codes || []));
-          return json({error:'unknown action'});
-        } catch(err) {
-          return json({error:err.message});
-        }
-      }
-
-      function json(obj) {
-        return ContentService.createTextOutput(JSON.stringify(obj))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-
-      function getBatchPrices(codes) {
-        codes = normalizeCodes(codes);
-        if (codes.length === 0) return {};
-        ensurePriceRows(codes);
-        return readPriceSheet(codes);
-      }
-
-      function getHistoricalPrices(codes, dateStr) {
-        if (!dateStr || !codes || codes.length === 0) return {};
-        return readGoogleFinancePrices(normalizeCodes(codes), dateStr);
-      }
-
-      function updateAllPrices(optionalCodes) {
-        let records;
-        if (optionalCodes && optionalCodes.length) {
-          records = normalizeCodes(optionalCodes).map(function(code) { return {code:code, name:'', market:''}; });
-        } else {
-          records = collectStockUniverse();
-        }
-
-        if (records.length === 0) {
-          return {status:'empty', count:0, message:'沒有可更新的股票代號'};
-        }
-
-        writeFormulaPriceSheet(records);
-        return {status:'ok', count:records.length};
-      }
-
-      function collectStockUniverse() {
-        const byCode = {};
-        fetchOfficialStockUniverse().forEach(function(r) {
-          if (r.code) byCode[r.code] = r;
-        });
-
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const manual = ss.getSheetByName(STOCK_LIST_SHEET);
-        if (manual) {
-          manual.getDataRange().getValues().slice(1).forEach(function(row) {
-            const code = normalizeCode(row[0]);
-            if (!code) return;
-            byCode[code] = {
-              code:code,
-              name:String(row[1] || byCode[code]?.name || ''),
-              market:String(row[2] || byCode[code]?.market || '')
-            };
-          });
-        }
-
-        ss.getSheets().forEach(function(sheet) {
-          if (!sheet.getName().startsWith(LEDGER_PREFIX)) return;
-          sheet.getDataRange().getValues().slice(1).forEach(function(row) {
-            const code = normalizeCode(row[1]);
-            if (!code || byCode[code]) return;
-            byCode[code] = {code:code, name:String(row[2] || ''), market:''};
-          });
-        });
-
-        return Object.keys(byCode).sort().map(function(code) { return byCode[code]; });
-      }
-
-      function fetchOfficialStockUniverse() {
-        const sources = [
-          {
-            market:'TPE',
-            url:'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL',
-            codeKeys:['Code','證券代號','股票代號'],
-            nameKeys:['Name','證券名稱','股票名稱']
-          },
-          {
-            market:'TWO',
-            url:'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes',
-            codeKeys:['SecuritiesCompanyCode','Code','證券代號','股票代號'],
-            nameKeys:['CompanyName','SecuritiesCompanyName','Name','證券名稱','股票名稱']
-          },
-          {
-            market:'TWO',
-            url:'https://www.tpex.org.tw/openapi/v1/tpex_esb_latest_statistics',
-            codeKeys:['SecuritiesCompanyCode','Code','公司代號','股票代號'],
-            nameKeys:['CompanyName','SecuritiesCompanyName','公司名稱','股票名稱','Name']
-          }
-        ];
-
-        const result = {};
-        sources.forEach(function(src) {
-          try {
-            const res = UrlFetchApp.fetch(src.url, {muteHttpExceptions:true});
-            if (res.getResponseCode() !== 200) return;
-            const data = JSON.parse(res.getContentText());
-            if (!Array.isArray(data)) return;
-            data.forEach(function(item) {
-              const code = normalizeCode(pick(item, src.codeKeys));
-              if (!code) return;
-              result[code] = {
-                code:code,
-                name:String(pick(item, src.nameKeys) || ''),
-                market:src.market
-              };
-            });
-          } catch(e) {
-            Logger.log('[stock universe] ' + src.market + ' failed: ' + e.message);
-          }
-        });
-        return Object.keys(result).map(function(code) { return result[code]; });
-      }
-
-      function writeFormulaPriceSheet(records) {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        let s = ss.getSheetByName(PRICE_SHEET);
-        if (!s) s = ss.insertSheet(PRICE_SHEET);
-
-        records = dedupeRecords(records);
-        s.clearContents();
-        s.getRange(1, 1, 1, 8).setValues([['代號','名稱','市場','GoogleFinance價','TWSE補洞價','最終使用價','價格來源','更新時間']]);
-        s.getRange(1, 1, 1, 8).setFontWeight('bold').setBackground('#f5e6d3');
-
-        if (records.length === 0) return;
-
-        s.getRange(2, 1, records.length, 3).setValues(records.map(function(r) {
-          return [r.code, r.name || '', r.market || ''];
-        }));
-        setPriceFormulas(s, 2, records.length);
-      }
-
-      function ensurePriceRows(codes) {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        let s = ss.getSheetByName(PRICE_SHEET);
-        if (!s || s.getLastRow() < 1) {
-          writeFormulaPriceSheet(normalizeCodes(codes).map(function(code) { return {code:code, name:'', market:''}; }));
-          return;
-        }
-
-        const lastRow = s.getLastRow();
-        const existing = {};
-        if (lastRow >= 2) {
-          s.getRange(2, 1, lastRow - 1, 1).getValues().forEach(function(row) {
-            const code = normalizeCode(row[0]);
-            if (code) existing[code] = true;
-          });
-        }
-
-        const missing = normalizeCodes(codes).filter(function(code) { return !existing[code]; });
-        if (missing.length === 0) return;
-
-        const start = s.getLastRow() + 1;
-        s.getRange(start, 1, missing.length, 3).setValues(missing.map(function(code) { return [code, '', '']; }));
-        setPriceFormulas(s, start, missing.length);
-      }
-
-      function setPriceFormulas(sheet, startRow, rowCount) {
-        const formulas = [];
-        for (let i = 0; i < rowCount; i++) {
-          const r = startRow + i;
-          formulas.push([
-            '=IFERROR(GOOGLEFINANCE("TPE:" & TEXT(A' + r + ',"0000"), "price"), IFERROR(GOOGLEFINANCE("TWO:" & TEXT(A' + r + ',"0000"), "price"), ""))',
-            '=IFERROR(VLOOKUP(TEXT(A' + r + ',"0000"), INDIRECT("盤中即時價!A:B"), 2, FALSE), "")',
-            '=IF(D' + r + '<>"", D' + r + ', E' + r + ')',
-            '=IF(D' + r + '<>"", "googlefinance", IF(E' + r + '<>"", "twse_proxy", "missing"))',
-            '=IF(E' + r + '<>"", IFERROR(VLOOKUP(TEXT(A' + r + ',"0000"), INDIRECT("盤中即時價!A:C"), 3, FALSE), ""), "")'
-          ]);
-        }
-        sheet.getRange(startRow, 4, rowCount, 5).setFormulas(formulas);
-      }
-
-      function readPriceSheet(filterCodes) {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const s = ss.getSheetByName(PRICE_SHEET);
-        if (!s) return {};
-
-        const wanted = {};
-        normalizeCodes(filterCodes || []).forEach(function(code) { wanted[code] = true; });
-        const useFilter = Object.keys(wanted).length > 0;
-
-        const rows = s.getDataRange().getValues();
-        const headers = rows[0] || [];
-        const finalIdx = findHeader(headers, ['最終使用價','現價','限價']);
-        const oldPriceIdx = headers.length >= 4 ? 2 : 1;
-        const priceIdx = finalIdx >= 0 ? finalIdx : oldPriceIdx;
-
-        const result = {};
-        rows.slice(1).forEach(function(row) {
-          const code = normalizeCode(row[0]);
-          if (!code || (useFilter && !wanted[code])) return;
-          const price = parsePrice(row[priceIdx]);
-          if (price > 0) result[code] = price;
-        });
-
-        const fallback = readFallbackSheet();
-        Object.keys(wanted).forEach(function(code) {
-          if (!result[code] && fallback[code] > 0) result[code] = fallback[code];
-        });
-        return result;
-      }
-
-      function readFallbackSheet() {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const s = ss.getSheetByName(INTRADAY_PRICE_SHEET);
-        if (!s) return {};
-        const rows = s.getDataRange().getValues();
-        const result = {};
-        rows.slice(1).forEach(function(row) {
-          const code = normalizeCode(row[0]);
-          const price = parsePrice(row[1]);
-          if (code && price > 0) result[code] = price;
-        });
-        return result;
-      }
-
-      function readGoogleFinancePrices(codes, dateStr) {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        let s = ss.getSheetByName(TEMP_FORMULA_SHEET);
-        if (!s) s = ss.insertSheet(TEMP_FORMULA_SHEET);
-
-        codes = normalizeCodes(codes);
-        const result = {};
-        if (codes.length === 0) return result;
-
-        s.clearContents();
-        s.getRange(1, 1, 1, 3).setValues([['代號', 'GOOGLEFINANCE價格', '公式更新時間']]);
-        s.getRange(2, 1, codes.length, 1).setValues(codes.map(function(code) { return [code]; }));
-        s.getRange(2, 2, codes.length, 1).setFormulas(codes.map(function(code, i) {
-          const row = i + 2;
-          return [dateStr ? historicalFormula(row, dateStr) : liveFormula(row)];
-        }));
-        const now = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
-        s.getRange(2, 3, codes.length, 1).setValues(codes.map(function() { return [now]; }));
-
-        for (let attempt = 0; attempt < FORMULA_RETRIES; attempt++) {
-          SpreadsheetApp.flush();
-          Utilities.sleep(FORMULA_WAIT_MS);
-          const values = s.getRange(2, 2, codes.length, 1).getValues();
-          values.forEach(function(row, i) {
-            const price = parsePrice(row[0]);
-            if (price > 0) result[codes[i]] = price;
-          });
-          if (Object.keys(result).length === codes.length) break;
-        }
-        return result;
-      }
-
-      function liveFormula(row) {
-        return '=IFERROR(GOOGLEFINANCE("TPE:" & TEXT(A' + row + ',"0000"), "price"), IFERROR(GOOGLEFINANCE("TWO:" & TEXT(A' + row + ',"0000"), "price"), ""))';
-      }
-
-      function historicalFormula(row, dateStr) {
-        const parts = dateStr.split('-').map(function(n) { return parseInt(n, 10); });
-        if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return liveFormula(row);
-        const d = 'DATE(' + parts[0] + ',' + parts[1] + ',' + parts[2] + ')';
-        return '=IFERROR(INDEX(GOOGLEFINANCE("TPE:" & TEXT(A' + row + ',"0000"), "price", ' + d + ', ' + d + '), 2, 2), IFERROR(INDEX(GOOGLEFINANCE("TWO:" & TEXT(A' + row + ',"0000"), "price", ' + d + ', ' + d + '), 2, 2), ""))';
-      }
-
-      function writePriceFallbackSheet(prices, source) {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        let s = ss.getSheetByName(INTRADAY_PRICE_SHEET);
-        if (!s) s = ss.insertSheet(INTRADAY_PRICE_SHEET);
-        if (s.getLastRow() === 0) s.appendRow(['代號','價格','更新時間','來源']);
-        if (s.getLastRow() < 1 || normalizeCode(s.getRange(1,1).getValue()) !== '代號') {
-          s.clearContents();
-          s.appendRow(['代號','價格','更新時間','來源']);
-        }
-
-        const now = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
-        const existing = {};
-        if (s.getLastRow() >= 2) {
-          s.getRange(2, 1, s.getLastRow() - 1, 1).getValues().forEach(function(row, i) {
-            const code = normalizeCode(row[0]);
-            if (code) existing[code] = i + 2;
-          });
-        }
-
-        const appendRows = [];
-        Object.entries(prices || {}).forEach(function(entry) {
-          const code = normalizeCode(entry[0]);
-          const price = parsePrice(entry[1]);
-          if (!code || price <= 0) return;
-          const row = [code, price, now, source || 'frontend'];
-          if (existing[code]) s.getRange(existing[code], 1, 1, 4).setValues([row]);
-          else appendRows.push(row);
-        });
-
-        if (appendRows.length > 0) {
-          s.getRange(s.getLastRow() + 1, 1, appendRows.length, 4).setValues(appendRows);
-        }
-        return Object.keys(prices || {}).length;
-      }
-
-      function getPriceCacheInfo() {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const s = ss.getSheetByName(PRICE_SHEET);
-        if (!s) return {updatedAt:null, count:0};
-        const rows = s.getDataRange().getValues();
-        const info = {updatedAt:null, count:Math.max(rows.length - 1, 0)};
-        const headers = rows[0] || [];
-        const timeIdx = findHeader(headers, ['更新時間']);
-        if (rows.length > 1 && timeIdx >= 0) info.updatedAt = String(rows[1][timeIdx] || '');
-        return info;
-      }
-
-      function writeLedgerSheet(date, data) {
-        if (!date || !data) return 0;
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const sheetName = LEDGER_PREFIX + date;
-        let s = ss.getSheetByName(sheetName);
-        if (!s) s = ss.insertSheet(sheetName);
-
-        s.clearContents();
-        s.appendRow(['日期','代號','名稱','分類','買入價','股數','貝氏評分']);
-        s.getRange(1,1,1,7).setFontWeight('bold').setBackground('#f5e6d3').setFontColor('#3d2b1a');
-
-        if (data.length > 0) {
-          const rows = data.map(function(r) {
-            return [r.date || date, r.code, r.name, r.cat, r.buyPrice, r.shares, r.score];
-          });
-          s.getRange(2, 1, rows.length, 7).setValues(rows);
-        }
-        return data.length;
-      }
-
-      function readAllLedgers() {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const result = [];
-        ss.getSheets().forEach(function(sheet) {
-          const name = sheet.getName();
-          if (!name.startsWith(LEDGER_PREFIX)) return;
-          const ledgerDate = name.replace(LEDGER_PREFIX, '');
-          const rows = sheet.getDataRange().getValues();
-          rows.slice(1).forEach(function(r) {
-            if (!r[1]) return;
-            result.push({
-              ledgerDate:ledgerDate,
-              date:fmtDate(r[0]),
-              code:String(r[1]).trim(),
-              name:r[2],
-              cat:r[3],
-              buyPrice:Number(r[4]),
-              shares:Number(r[5]),
-              score:Number(r[6])
-            });
-          });
-        });
-        return result;
-      }
-
-      function fmtDate(v) {
-        if (v instanceof Date) return Utilities.formatDate(v, TIMEZONE, 'yyyy-MM-dd');
-        return String(v);
-      }
-
-      function dedupeRecords(records) {
-        const seen = {};
-        return (records || []).map(function(r) {
-          if (typeof r === 'string' || typeof r === 'number') return {code:normalizeCode(r), name:'', market:''};
-          return {code:normalizeCode(r.code), name:String(r.name || ''), market:String(r.market || '')};
-        }).filter(function(r) {
-          if (!r.code || seen[r.code]) return false;
-          seen[r.code] = true;
-          return true;
-        });
-      }
-
-      function normalizeCodes(codes) {
-        return dedupeRecords(codes).map(function(r) { return r.code; });
-      }
-
-      function normalizeCode(v) {
-        return String(v || '').replace(/\\.TW$/i, '').replace(/\\.0$/, '').trim();
-      }
-
-      function parsePrice(v) {
-        if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
-        const n = Number(String(v || '').replace(/,/g, '').trim());
-        return Number.isFinite(n) ? n : 0;
-      }
-
-      function pick(obj, keys) {
-        for (let i = 0; i < keys.length; i++) {
-          if (obj[keys[i]] !== undefined && obj[keys[i]] !== null && obj[keys[i]] !== '') return obj[keys[i]];
-        }
-        return '';
-      }
-
-      function findHeader(headers, names) {
-        for (let i = 0; i < headers.length; i++) {
-          if (names.indexOf(String(headers[i] || '').trim()) >= 0) return i;
-        }
-        return -1;
-      }
-
-      function testGetPrices() {
-        const prices = getBatchPrices(['2330','6620','2317','2382']);
-        Logger.log(JSON.stringify(prices));
-      }`;
-      }
-
       function copyGASCode() {
         navigator.clipboard.writeText(document.getElementById('gasCode').value);
         showToast('GAS程式碼已複製','ok');
@@ -4381,9 +3552,9 @@
           return;
         }
 
-        // ── 2. 對齊帳本估值規則（今日現價可用才採用，否則 fallback 到 buyPrice）
+        // ── 2. 對齊最新現價（查無現價則 fallback 到 buyPrice）
         virtualLedger.forEach(stock => {
-          stock._livePrice = calcLedgerMetrics(stock).price;
+          stock._livePrice = (livePrices[stock.code] > 0) ? livePrices[stock.code] : stock.buyPrice;
         });
 
         // ── 3. 分組計算（Group By cat）
@@ -5115,8 +4286,12 @@
         // 3. 補齊現價與損益，score 直接取帳本欄位
         const enriched = allLedger.map(r => {
           const score     = parseFloat(r.score) || 0;
-          const m = calcLedgerMetrics(r);
-          return { ...r, score, livePrice: m.price, invested: m.invested, curVal: m.curVal, pnl: m.pnl, pct: m.pct };
+          const livePrice = livePrices[r.code] || r.buyPrice;
+          const invested  = r.buyPrice * r.shares;
+          const curVal    = livePrice  * r.shares;
+          const pnl       = curVal - invested;
+          const pct       = invested > 0 ? pnl / invested * 100 : 0;
+          return { ...r, score, livePrice, invested, curVal, pnl, pct };
         });
 
         const withScore    = enriched.filter(r => r.score > 0);
