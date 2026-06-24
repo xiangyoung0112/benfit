@@ -1111,6 +1111,9 @@
           showWelcomeModal();
         }
 
+        // 開啟時顯示快取狀態彈窗
+        showWelcomeModal();
+
         document.addEventListener('click', e => {
           if(!e.target.closest('.export-wrap')) {
             document.querySelectorAll('.export-menu').forEach(m => m.classList.remove('open'));
